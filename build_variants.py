@@ -52,6 +52,7 @@ def build(source, output_dir, assign_file=None):
 
     low = FAT12(source.read_bytes())
     low.writefile('SYSTEM.INI', cfg.replace(b'shell=WINFILE.EXE', b'shell=SKI.EXE'))
+    low.writefile('AUTOEXEC.BAT', low.readfile('AUTOEXEC.BAT').replace(b'ECHO Start SkiFree from File Manager once Windows opens.', b'ECHO SkiFree will start directly when Windows opens.'))
     for filename in ('WINFILE.EXE', 'WINMINE.EXE', 'NOTEPAD.EXE'):
         try:
             low.delete(filename)
