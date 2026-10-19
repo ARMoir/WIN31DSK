@@ -55,3 +55,9 @@ The script verifies floppy size, mirrored FAT tables, core DOS/Windows files, an
 - [Microsoft KB 115243 — Windows B: prompt workaround via ASSIGN.COM](https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/115243)
 - [MS-DOS 6.22 supplemental files: ASSIGN.COM](https://freedos.link/OS/Using_MS-DOS_622.pdf)
 - [Winhistory single-floppy Windows 3.1](https://www.winhistory.de/more/386/wof.htm)
+
+### Troubleshooting `Error loading DISPLAY.DRV`
+
+A physical PS/2 test of an earlier direct-SkiFree floppy showed `Error loading DISPLAY.DRV` after A:/B: swap prompts. The `DISPLAY.DRV` binary in that image is byte-identical to the file in a Task List variant that reached Windows successfully, so **do not assume the VGA driver is missing**. Possible causes include an intermittent floppy read, an unsatisfied drive-swap request, or a Windows startup failure. The ASSIGN-enabled edition has **not** yet been tested against this error.
+
+At the DOS prompt test `DIR A:\DISPLAY.DRV` and `COPY A:\DISPLAY.DRV NUL` (the second command reads the whole file). If a data or CRC error occurs, rewrite the image to a different 1.44 MB floppy and verify the write. A good DOS file read does not guarantee Windows can initialize the driver; if the error persists, use a known-working boot image and compare the startup files, one change at a time.
