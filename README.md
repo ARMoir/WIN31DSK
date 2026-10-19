@@ -1,39 +1,57 @@
-# WIN31DSK — Windows 3.1 on one 1.44 MB floppy
+# WIN31DSK — Windows 3.1 from one floppy on an IBM PS/2 Model 50Z
 
-Two experimental single-floppy Windows 3.1 **286 Standard Mode** builds for the IBM PS/2 Model 50Z (10 MHz 80286, 2 MB RAM, one floppy drive). Both derive from a verified DOS 6.22 boot image and contain the original 16-bit SkiFree.
+Experimental, **286-compatible** MS-DOS 6.22 / Windows 3.1 **1.44 MB** floppy builds for an original 10 MHz IBM PS/2 Model 50Z with 2 MB of RAM. Each contains the original 16-bit SkiFree.
 
 ## Editions
 
-| Edition | Windows shell | Extras | Status |
-| --- | --- | --- | --- |
-| `WIN31DSK_Full_FileManager_286.img` | File Manager | Notepad, Minesweeper, SkiFree | File Manager booted on real 50Z in the earlier build. SkiFree showed insufficient memory with 2 MB. New A:-focused configuration is **untested**. |
-| `WIN31DSK_LowMemory_TaskManager_286.img` | Task Manager | SkiFree | Designed to reduce startup memory consumption; **not yet hardware-tested**. |
+| Edition | Startup shell | Notes |
+| --- | --- | --- |
+| `WIN31DSK_Full_FileManager_286.img` | `WINFILE.EXE` | File Manager, Notepad, Minesweeper, SkiFree. Earlier edition booted on real 50Z, but SkiFree reported insufficient memory with 2 MB RAM. |
+| `WIN31DSK_LowMemory_SkiFreeShell_286.img` | `SKI.EXE` | Launches SkiFree directly when Windows starts, without File Manager or Task List. **New version not yet hardware-tested.** |
 
-Both images are raw 1,474,560-byte floppy images. They boot to `A:\>`; type `WIN /S` for Windows 3.1 Standard Mode. Neither launches SkiFree automatically. In the low-memory edition, launch `A:\SKI.EXE` from Task Manager's Run command if available.
+The earlier Task Manager edition successfully reached its UI on the real 50Z, but **Task List does not have a File > Run launcher**. The new low-memory build replaces it with SkiFree itself as the shell.
 
-### B: drive switching
+### Phantom drive B: and repeated swap prompts
 
-MS-DOS can expose *one physical floppy drive* as both logical **A:** and **B:**. Accessing B: may show an “Insert diskette for drive B:” prompt even with only one actual drive. The original build booted Windows successfully after pressing Enter at the A:/B: prompts a few times.
+MS-DOS 6.22 treats a PC with one actual floppy as **two logical drives, A: and B:**. Accessing B: can produce `Insert diskette for drive B:` even though there is no second physical drive. The same prompt occurred in **both** File Manager and Task Manager editions, so setting File Manager's initial view to A: was not sufficient.
 
-The full build's `WINFILE.INI` specifies `A:\*.*`, disables launch indexing, and hides the drive bar. The low-memory build doesn't launch File Manager at all. **These are experimental mitigations, not proven fixes** for the B: prompt. If prompted, leave the same disk inserted and press Enter. [Microsoft's archived single-drive explanation](https://helparchive.huntertur.net/document/34460).
+The documented DOS workaround is **`ASSIGN B=A`**: it redirects B: requests to A: without simulated disk swaps. It requires `ASSIGN.COM`, an external program included in Microsoft's **MS-DOS 6.22 Supplemental Disk** (not generally present on the normal 6.22 boot floppy).
 
-### Writing and booting
+The builder's optional `--assign-file` argument adds a user-supplied `ASSIGN.COM` and invokes `A:\ASSIGN.COM B=A` from `AUTOEXEC.BAT` before Windows starts. This is a **promising but untested fix on the Model 50Z**. Do not expect the versions built without `--assign-file` to stop all A:/B: prompts.
 
-1. Use WinImage to *write the IMG as a disk image* to a spare 1.44 MB floppy.
-2. Boot the PS/2. At the `A:\>` prompt type `WIN /S`.
-3. In the full edition run `SKI.EXE` from File Manager. In the low-memory edition use Task Manager's Run command, entering `A:\SKI.EXE`.
-4. If DOS hangs during startup, F5 bypasses startup files and F8 steps through them; media errors may require rewriting a different floppy.
+## Booting
 
-## Reproducible builds
+Write an IMG with WinImage as a raw floppy image (do not copy the file itself). Boot the PS/2. At the DOS prompt run:
 
-Because this is a **public repository**, proprietary DOS, Windows, and SkiFree binaries are **not committed by this project**. Users must supply their own legally obtained source image.
+```dos
+WIN /S
+```
 
-Place `fatmini.py` and `build_variants.py` together, then run:
+This forces Windows 3.1 Standard Mode for the 286. The low-memory edition should start SkiFree as the Windows shell; the full edition starts File Manager, where SkiFree can be opened from `A:\SKI.EXE`.
+
+If Windows pauses at the splash screen without drive light activity, the console may be waiting on a hidden A:/B: swap prompt; pressing Enter eventually booted an earlier edition on the real 50Z. Disk media read errors are separate and may require a different floppy.
+
+**Status:** The previous full desktop and Task List builds have booted on actual hardware. The new direct-SkiFree shell and optional ASSIGN mapping have **not** been tested on that machine. Disk integrity checks are not a substitute for a successful boot test.
+
+## Rebuild from your own source image
+
+The repository contains scripts, **not Microsoft DOS/Windows or SkiFree binary images**. Provide your own legally obtained corrected SkiFree + Windows 3.1 source floppy image, then run:
 
 ```sh
 python build_variants.py --source PS2_50Z_Win31_286_SkiFree_FIXED.img --output-dir dist
 ```
 
-The source is the corrected 1.44 MB Windows 3.1 + DOS 6.22 + SkiFree image, not the earlier faulty decompression builds. Python 3.9+; no external dependencies. Build output and SHA-256 sums are printed at completion.
+To build versions that try to suppress the A:/B: prompts:
 
-Source inspiration: [Winhistory Windows 3.1 floppy](https://www.winhistory.de/more/386/wof.htm). Windows File Manager settings: [Windows 3.1 Resource Kit](https://vtda.org/docs/computing/Microsoft/OS/030-31645_Microsoft_Windows_3.1_Resource_Kit_1992.pdf).
+```sh
+python build_variants.py --source PS2_50Z_Win31_286_SkiFree_FIXED.img --output-dir dist --assign-file ASSIGN.COM
+```
+
+The script verifies floppy size, mirrored FAT tables, core DOS/Windows files, and checks that original executables remain byte-identical to the supplied source. It does not assemble licensed Windows or DOS components from scratch.
+
+## Sources
+
+- [Microsoft KB 34908 — single physical floppy maps to A: and B:](https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/34908)
+- [Microsoft KB 115243 — Windows B: prompt workaround via ASSIGN.COM](https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/115243)
+- [MS-DOS 6.22 supplemental files: ASSIGN.COM](https://freedos.link/OS/Using_MS-DOS_622.pdf)
+- [Winhistory single-floppy Windows 3.1](https://www.winhistory.de/more/386/wof.htm)
