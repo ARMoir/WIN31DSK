@@ -23,7 +23,20 @@ def validate(d):
         assert len(d.readfile(filename)) > 0, filename
     assert b'B:\\' not in d.readfile('SYSTEM.INI').upper()
 
-def build(source, output_dir):
+def add_assign(image, assign_file):
+    if assign_file is None:
+        return
+    binary = assign_file.read_bytes()
+    if not binary or len(binary) >= 65536:
+        raise ValueError("Invalid ASSIGN.COM input")
+    image.writefile('ASSIGN.COM', binary)
+    startup = image.readfile('AUTOEXEC.BAT')
+    if b'ASSIGN' in startup.upper():
+        raise ValueError('ASSIGN is already configured')
+    startup = startup.replace(b'@ECHO OFF\r\n', b'@ECHO OFF\r\nA:\\ASSIGN.COM B=A\r\n', 1)
+    image.writefile('AUTOEXEC.BAT', startup)
+
+def build(source, output_dir, assign_file=None):
     original = FAT12(source.read_bytes())
     validate(original)
     cfg = original.readfile('SYSTEM.INI')
@@ -32,19 +45,21 @@ def build(source, output_dir):
 
     full = FAT12(source.read_bytes())
     full.writefile('WINFILE.INI', WINFILE_SETTINGS)
+    add_assign(full, assign_file)
     validate(full)
     full_path = output_dir / 'WIN31DSK_Full_FileManager_286.img'
     full_path.write_bytes(full.b)
 
     low = FAT12(source.read_bytes())
-    low.writefile('SYSTEM.INI', cfg.replace(b'shell=WINFILE.EXE', b'shell=TASKMAN.EXE'))
+    low.writefile('SYSTEM.INI', cfg.replace(b'shell=WINFILE.EXE', b'shell=SKI.EXE'))
     for filename in ('WINFILE.EXE', 'WINMINE.EXE', 'NOTEPAD.EXE'):
         try:
             low.delete(filename)
         except KeyError:
             pass
+    add_assign(low, assign_file)
     validate(low)
-    low_path = output_dir / 'WIN31DSK_LowMemory_TaskManager_286.img'
+    low_path = output_dir / 'WIN31DSK_LowMemory_SkiFreeShell_286.img'
     low_path.write_bytes(low.b)
 
     for path in (full_path, low_path):
@@ -60,5 +75,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True, help='Corrected source IMG (user supplied)')
     parser.add_argument('--output-dir', type=Path, default=Path('dist'))
+    parser.add_argument('--assign-file', type=Path, help='Optional MS-DOS 6.22 Supplemental Disk ASSIGN.COM')
     args = parser.parse_args()
-    build(args.source, args.output_dir)
+    build(args.source, args.output_dir, args.assign_file)
