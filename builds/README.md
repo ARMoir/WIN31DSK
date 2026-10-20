@@ -7,14 +7,14 @@ These are the **three IMG revisions reported working on a real 10 MHz IBM PS/2 M
 | Build | Recommended descriptive filename | Original locally verified IMG | Real hardware confirmation |
 | --- | --- | --- | --- |
 | **SkiFree / 286** | `WIN31DSK-01-SkiFree-286-2MB.img` | `WIN31DSK_LowMemory_SkiFree_GDI_Relocated.img` | Windows 3.1 Standard Mode ran, SkiFree played successfully, and B: switching stopped. Starts from DOS prompt with `WIN /S`. |
-| **Classic Games / 286** | `WIN31DSK-02-ProgramManager-Games-286-2MB.img` | `WIN31DSK_ProgramManager_Games_286_Beta.img` | Windows 3.1 Program Manager launched; Solitaire, Minesweeper, and Calculator ran on the original 286 in this earlier lightweight revision. Later expanded Calculator builds were not stable. |
+| **Classic Games + Calculator / 286** | `WIN31DSK-02-ProgramManager-Games-Calculator-286-2MB.img` | `WIN31DSK_ProgramManager_Games_286_Beta.img` | Windows 3.1 Program Manager launched; Solitaire, Minesweeper, and Calculator ran on the original 286 in this earlier lightweight revision. Later expanded Calculator builds were not stable. |
 | **Notepad Desktop / 286** — **preferred** | `WIN31DSK-03-Notepad-Desktop-286-2MB.img` | `WIN31DSK_286_Notepad_CleanLayout_TEST.img` | Windows 3.1 Program Manager, Notepad, and the clean Games/Applications layout were confirmed on the 50Z. The retained games, Clock, and smaller PS/2 mouse driver originated in a prior tested configuration. |
 
 Each IMG is 1,474,560 bytes (a complete 1.44 MB disk). SHA-256, in the same order:
 
 ```text
 0f451c25b5c139380d5c206676d292e3c0652be2ebb54d1adef562f0443df2fd  WIN31DSK-01-SkiFree-286-2MB.img
-4753d27205e8f68862d66b5ee91048a6c7abbcfcbfa9562b261b16053cb97e8b  WIN31DSK-02-ProgramManager-Games-286-2MB.img
+4753d27205e8f68862d66b5ee91048a6c7abbcfcbfa9562b261b16053cb97e8b  WIN31DSK-02-ProgramManager-Games-Calculator-286-2MB.img
 3963c37e53ef658557138b7f3674503e0f8d862dbb1998a7df1769c8d7408d1a  WIN31DSK-03-Notepad-Desktop-286-2MB.img
 ```
 
