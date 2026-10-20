@@ -158,3 +158,20 @@ Both keep the **Games** group (Solitaire, Minesweeper, Reversi), **Applications*
 **Recommended testing:** Boot the DOS=HIGH-only control first; verify Clock and several minutes of Solitaire. Then try the Windows 3.0 mouse-driver image, confirming pointer movement and buttons before gameplay. If either build fails, go back to the exact prior Clock-working image. These are filesystem-validated builds, **not yet tested on real hardware**. They are not guaranteed to cure `Cannot read from drive A:` read errors. No licensed IMG binaries are committed to this public repository.
 
 Detailed standalone test notes: `WIN31DSK_286_Performance_MouseDriver_TEST_README.md` (distributed with the test ZIP, not committed here).
+
+
+### Controlled rollback: remove DOS=HIGH while keeping smaller PS/2 mouse driver (2026-10-20)
+
+A new diagnostic image, `WIN31DSK_5Apps_Clock_SmallMouse_NoDOSHIGH_286_TEST.img`, is the exact byte-for-byte equivalent of the previously built `WIN31DSK_5Apps_SmallMouse_Only_286_TEST.img`. It differs from `WIN31DSK_5Apps_Clock_DOS_HIGH_MOUSE30_286_TEST.img` **only in `CONFIG.SYS`**, reverting to:
+
+```ini
+DEVICE=A:\HIMEM.SYS
+FILES=30
+BUFFERS=10
+```
+
+Confirmed directly in the image: `DIGITAL.FON` (1,712 bytes) is present and `WIN.INI` includes `DIGITAL 100,96,96: Digital Font=DIGITAL.FON` in `[fonts]`. Native Windows 3.0 `MOUSE.DRV` is still 4,896 bytes. The boot sector, the games and utility executables, GDI, and every other file's contents and disk locations are unchanged from the DOS=HIGH + smaller mouse build. The only on-disk byte differences were **31 bytes** associated with the `CONFIG.SYS` change. Filesystem checks passed.
+
+SHA-256: `7ced4cf3a91777e7092cc52f342e1a573d277255fd6036a41f725503f4f7c9c1`.
+
+**Status: testing on the actual PS/2 is pending.** This isolates the DOS=HIGH variable after Calculator reported insufficient memory and Clock raised a GDI protection fault in the optimized image. It does not establish that DOS=HIGH caused either issue. Test Calculator first after a cold boot; test Clock first after a separate cold boot, then longer gameplay to check for read errors. The IMG contains proprietary components and is not hosted in this public repository.
