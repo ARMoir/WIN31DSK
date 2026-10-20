@@ -131,3 +131,16 @@ A new test uses `WINDOWS/SYSTEM/MOUSE.DRV` from the user-provided Windows 3.0 `W
 - `WIN31DSK_5Apps_DOS_HIGH_SmallMouse_286_TEST.img`: same substitution into the separate `DOS=HIGH` experimental build.
 
 Both are full 1.44 MB FAT12 images with **64,512 bytes free**. Every other file, its cluster chain, and the boot sector match each respective baseline; FAT mirrors and chain integrity checked. **Neither image has been boot-tested on the IBM PS/2**, and a Windows 3.0 driver may not behave perfectly under Windows 3.1. Test the mouse-only variant first and retain the last working disk. A smaller driver does not guarantee an equivalent improvement in usable RAM or remedy the reported runtime floppy read errors.
+
+## 286 memory + mouse-driver performance experiment (2026-10-20)
+
+Two **separate test images**, derived from the exact five-app Windows 3.0 Clock edition with working DIGITAL.FON registration, let us isolate the effect of conventional-memory optimizations on a 2 MB Model 50Z:
+
+- `WIN31DSK_5Apps_Clock_DOS_HIGH_286_TEST.img`: **control**; enables `DOS=HIGH` in `CONFIG.SYS` while retaining every other DOS/Windows program, driver, application, and physical file location. Free space: 58,880 bytes.
+- `WIN31DSK_5Apps_Clock_DOS_HIGH_MOUSE30_286_TEST.img`: same, but replaces native Windows 3.1 `MOUSE.DRV` (10,672 bytes) with the original Windows 3.0 `MOUSE.DRV` (4,896 bytes) taken from the user's Windows 3.0 distribution. The original 3.0 SYSTEM.INI identifies its native mouse driver as Microsoft/IBM PS/2. The mouse driver stays at its original starting cluster; 11 tail clusters are freed. Free space: 64,512 bytes.
+
+Both keep the **Games** group (Solitaire, Minesweeper, Reversi), **Applications** (Calculator, Windows 3.0 Clock), relocated `GDI.EXE`, original DOS boot files, `ASSIGN.COM B=A`, and font registration. The second version saves 5.5 KiB of disk allocation but **may or may not** reduce in-memory usage or work correctly under Windows 3.1. `CTMOUSE.EXE` from Mini-Windows is **not** included: it is a DOS resident driver, not a drop-in replacement for a native Windows mouse driver.
+
+**Recommended testing:** Boot the DOS=HIGH-only control first; verify Clock and several minutes of Solitaire. Then try the Windows 3.0 mouse-driver image, confirming pointer movement and buttons before gameplay. If either build fails, go back to the exact prior Clock-working image. These are filesystem-validated builds, **not yet tested on real hardware**. They are not guaranteed to cure `Cannot read from drive A:` read errors. No licensed IMG binaries are committed to this public repository.
+
+Detailed standalone test notes: `WIN31DSK_286_Performance_MouseDriver_TEST_README.md` (distributed with the test ZIP, not committed here).
