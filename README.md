@@ -122,3 +122,12 @@ It removes Character Map, replaces Windows 3.1 Clock with Windows 3.0 Clock, and
 Because Reversi previously displayed a Windows `Cannot read from drive A:` message after drawing its board, a separate diagnostic `WIN31DSK_5Apps_Win30Clock_ReversiRelocated_286_BETA.img` keeps everything identical except the unchanged Reversi EXE is stored on another contiguous cluster chain (starting at cluster 2721 instead of 3). That is a media/placement experiment, **not a verified fix**, and should only be used if the standard edition has a reproducible read problem. The original Reversi executable is the same Windows 3.0 binary in the W3 archive.
 
 These IMG builds contain proprietary Microsoft binaries and are not committed to this public repository; please build from your own licensed source files.
+
+### Smaller Windows 3.0 mouse driver experiment (2026-10-20)
+
+A new test uses `WINDOWS/SYSTEM/MOUSE.DRV` from the user-provided Windows 3.0 `W3.zip` (4,896 bytes), replacing Windows 3.1's 10,672-byte `MOUSE.DRV`. It frees **5,632 bytes of FAT12 allocation space**. This is a **Windows driver**; the roughly 5 KB `CTMOUSE.EXE` in the Mini-Windows 3.11 image is a separate *DOS* driver and does not replace it.
+
+- `WIN31DSK_5Apps_SmallMouse_Only_286_TEST.img`: only substitutes `MOUSE.DRV` into the clock-font-registered baseline; no `DOS=HIGH` change.
+- `WIN31DSK_5Apps_DOS_HIGH_SmallMouse_286_TEST.img`: same substitution into the separate `DOS=HIGH` experimental build.
+
+Both are full 1.44 MB FAT12 images with **64,512 bytes free**. Every other file, its cluster chain, and the boot sector match each respective baseline; FAT mirrors and chain integrity checked. **Neither image has been boot-tested on the IBM PS/2**, and a Windows 3.0 driver may not behave perfectly under Windows 3.1. Test the mouse-only variant first and retain the last working disk. A smaller driver does not guarantee an equivalent improvement in usable RAM or remedy the reported runtime floppy read errors.
