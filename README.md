@@ -1,20 +1,28 @@
 ## Current hardware-tested baseline (2026-10-20)
 
-**Partially confirmed on the actual IBM PS/2 Model 50Z:** `WIN31DSK_5Apps_Clock_DOS_HIGH_MOUSE30_286_TEST.img` boots Windows 3.1 successfully and the **smaller Windows 3.0 native PS/2 mouse driver and games operate**. Later testing exposed two regressions: Calculator gives **"Insufficient memory to run this application"**, and Clock gives **a GDI.EXE general protection fault at 0019:0051**. **Do not regard this optimized image as fully working yet.** The earlier `WIN31DSK_5Apps_Win30Clock_FontRegistered_286_TEST.img` reportedly ran Clock successfully. Suspects include memory pressure, different Windows runtime state, or an image/configuration difference; no root cause established. Test Calculator immediately after a cold boot; on a separate fresh boot test Clock first. Then compare a DOS=HIGH-only build and a small-mouse-only build against the font-registered baseline.
+**Preferred build:** `WIN31DSK_286_Notepad_CleanLayout_TEST.img`
 
-- Original **10 MHz Intel 80286**, **2 MB RAM**, **one 1.44 MB floppy**, **no hard drive**.
-- MS-DOS 6.22 with `DOS=HIGH`; Windows 3.1 **Standard Mode** with Program Manager.
-- Two Program Manager groups: **Games** (Solitaire, Minesweeper, Reversi) and **Applications** (Calculator, Windows 3.0 Clock plus DIGITAL.FON).
-- DOS logical floppy alias handled by `ASSIGN.COM B=A`; smaller Windows 3.0 `MOUSE.DRV` is working on the actual machine.
-- The earlier `Cannot read from drive A:` gameplay issue means extended gameplay/read reliability should still be assessed; this status represents **reported success in current testing**, not a completed long-duration stress test.
+**Owner-confirmed on the real IBM PS/2 Model 50Z:** Windows boots, **Notepad launches successfully**, and the default Program Manager group/icon layout **looks fantastic** at the machine's VGA resolution. This is the first configuration the owner has explicitly selected as the keeper after the Calculator/File Manager experiments. The other apps and native PS/2 mouse are carried over from the earlier Clock-working, games-working base; please continue to distinguish that history from a fresh extended stress test of every app in this specific image.
 
-This is an **experimental performance variant, not the final baseline**. Keep the previously successful SkiFree/Program Manager images and the Clock-working font-registered build as backups until the regressions are resolved. The binary IMG contains copyrighted DOS/Windows components and is not distributed by this public source repository.
+- **Hardware:** original 10 MHz Intel 80286, 2 MB RAM, one 1.44 MB floppy, no hard drive.
+- **Startup:** MS-DOS 6.22, Windows 3.1 Standard Mode, original Windows 3.1 Program Manager, **no `DOS=HIGH`**.
+- **Games:** Solitaire, Minesweeper, Reversi.
+- **Applications:** original Windows 3.0 Notepad and Windows 3.0 Clock, with `DIGITAL.FON` registered.
+- **Drivers/boot:** 4,896-byte native Windows 3.0 PS/2 `MOUSE.DRV`, `ASSIGN.COM B=A` to prevent phantom floppy B: prompts.
+- **Layout:** Games and Applications in separate clean rows, 88-pixel icon spacing, title wrapping, reproducible default group positions.
+- **Floppy:** 1,474,560-byte image; **75,776 bytes free**.
+- **SHA-256:** `3963c37e53ef658557138b7f3674503e0f8d862dbb1998a7df1769c8d7408d1a`.
+
+**Not included:** Calculator (insufficient-memory errors) and File Manager (intermittent/consistent Windows floppy-read errors on the user's machine). Those variants remain documented below as experiments, not working release recommendations.
+
+The Windows/DOS binary image contains proprietary Microsoft files and is **not distributed through this public source repository**.
+
 
 ---
 
 # WIN31DSK — Windows 3.1 from one floppy on an IBM PS/2 Model 50Z
 
-Experimental, **286-compatible** MS-DOS 6.22 / Windows 3.1 **1.44 MB** floppy builds for an original 10 MHz IBM PS/2 Model 50Z with 2 MB of RAM. Each contains the original 16-bit SkiFree.
+Experimental and hardware-tested **286-compatible** MS-DOS 6.22 / Windows 3.1 **1.44 MB** floppy builds for an original 10 MHz IBM PS/2 Model 50Z with 2 MB of RAM. Earlier variants included 16-bit SkiFree; the preferred Notepad desktop edition instead includes Solitaire, Minesweeper, Reversi, Clock, and Notepad.
 
 ## Editions
 
@@ -217,7 +225,7 @@ This experiment should not be promoted to a stable build until File Manager, Clo
 
 Hardware follow-up: Both previous File Manager images had `Cannot read from drive A:` errors when opening File Manager (the more spacious version otherwise worked), so File Manager has been removed from this experiment. Calculator had previously failed due to memory errors, including when attempted as the Windows shell.
 
-New **not yet hardware-tested** `WIN31DSK_286_Notepad_CleanLayout_TEST.img`, built from the hardware-confirmed **Clock-working** `WIN31DSK_5Apps_Clock_SmallMouse_NoDOSHIGH_286_TEST.img`:
+**Hardware-tested and selected as the preferred edition** `WIN31DSK_286_Notepad_CleanLayout_TEST.img`, built from the hardware-confirmed **Clock-working** `WIN31DSK_5Apps_Clock_SmallMouse_NoDOSHIGH_286_TEST.img`:
 - Remove `CALC.EXE` (43,072 bytes); add original Windows 3.0 `NOTEPAD.EXE` (31,936 bytes; imports `KERNEL`, `GDI`, `USER`, `KEYBOARD`, all available).
 - Preserve native Windows 3.1 **PROGMAN.EXE**, all three games, Windows 3.0 Clock and font registration, the working 4,896-byte Windows 3.0 PS/2 mouse driver, `WIN87EM.DLL`, the `ASSIGN B=A` drive-alias fix, and the **no-`DOS=HIGH`** DOS configuration.
 - Rename Calculator program group item to **Notepad**, with command `A:\NOTEPAD.EXE` and a 1-bit monochrome icon derived from the authentic 1990 Windows 3.0 icon in `ACCESSOR.GRP`.
@@ -226,4 +234,4 @@ New **not yet hardware-tested** `WIN31DSK_286_Notepad_CleanLayout_TEST.img`, bui
 - 75,776 bytes of floppy space free; 40 files; FAT12 mirrors, file chains, and `.GRP` checksums validated. Only `WIN.INI`, `APPS.GRP`, `GAMES.GRP`, deleted `CALC.EXE`, and added `NOTEPAD.EXE` differ at the file-content level from the Clock-working source.
 - SHA-256: `3963c37e53ef658557138b7f3674503e0f8d862dbb1998a7df1769c8d7408d1a`
 
-**Hardware test still needed:** check both group windows and icon labels, launch Notepad, then Clock, then games. A DOS read error is not excluded by the filesystem validation. No copyrighted IMG files are committed to this repo.
+**Hardware test outcome:** the owner confirms Notepad launches successfully and the startup group/icon layout looks fantastic; they selected this edition as the keeper. The Games, Clock, and mouse driver are preserved from an earlier working baseline, but extended simultaneous-app stress testing of this exact image has not been separately reported. No copyrighted IMG files are committed to this repo.
