@@ -88,3 +88,19 @@ The image is **1,474,560 bytes** with **2,048 bytes free**. The user-provided `R
 To make room while preserving the previously working applications, `TASKMAN.EXE` and `COMM.DRV` were removed, and `[boot] comm.drv=` was set blank. This disables Windows serial communications and the separate Task List utility, but not Program Manager or DOS itself. The original DOS boot files, relocated `GDI.EXE`, `ASSIGN.COM B=A`, and other application binaries remain unchanged.
 
 **Hardware test pending:** Reversi has not yet been verified on the Model 50Z. Clock also remains experimental because `COMMDLG.DLL` cannot fit. The actual IMG is intentionally **not committed to this public repository**, because it contains proprietary Microsoft executables. Owners should use their own licensed source files.
+
+### Six-app no-splash startup fix (2026-10-19)
+
+The first six-app Reversi beta failed at startup with only `Error loading` and no filename. Root cause: to make space, that beta removed `COMM.DRV` and set `comm.drv=` to an empty value in `SYSTEM.INI`. Microsoft's [KB 83548](https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/83548) specifically lists blank `COMM.DRV=` values as a source of this loading failure.
+
+A corrected experimental variant is named `WIN31DSK_ProgramManager_6Apps_NoSplash_FIXED_BETA.img`. It starts from the six-app beta and:
+- Replaces the 44,170-byte logo-bearing `WIN.COM` with the exact 16,112-byte original `WIN.CNF` loader already embedded at the start of `WIN.COM`. This is a documented Windows 3.1 no-splash technique; it does **not** remove critical display drivers, fonts, or GDI.
+- Removes the now-redundant `WIN.CNF` file.
+- Restores `COMM.DRV` and its proper `comm.drv=COMM.DRV` setting from the previously working three-app Program Manager image.
+- Restores `TASKMAN.EXE`, which fits again.
+- Keeps DOS 6.22, floppy A/B alias fix, relocated `GDI.EXE`, Program Manager groups, and all six application executables intact.
+
+The resulting 1.44 MB image has **32,768 bytes free** (SHA-256 `4ef615690259819f69ef9257d27f043f5f745663cdae1552abb7d5d698f7a2e6`). FAT12 chains and mirrored allocation tables were checked. **Real 286 testing is still pending.** Keep the last hardware-confirmed working image.
+
+A contemporary description of the logo-free launcher: [1995 Windows 3.1 startup-logo discussion](https://groups.google.com/g/bit.listserv.win3-l/c/Iq_rjl2-Ekc).
+
