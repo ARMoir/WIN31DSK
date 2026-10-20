@@ -195,3 +195,19 @@ Two FAT12-validated, **not yet hardware-tested** experimental IMG variants were 
 - `WIN31DSK_286_Win30ProgramManager_And_Calculator_TEST.img` changes both `CALC.EXE` and `PROGMAN.EXE` to 3.0 versions (127,488 free bytes).
 
 Both preserve the DOS boot files, floppy A:/B: mapping, no-DOS=HIGH startup, smaller Windows 3.0 mouse driver, proven Clock font configuration, relocated `GDI.EXE`, and every other executable byte-for-byte at the same starting sectors. FAT mirrors, chains, and orphan/cross-link checks passed. **Test the Calculator-only version first**, then the reduced Program Manager variant if it still gives insufficient memory. Keep the currently Clock-working image as fallback. The proprietary IMG files are not committed to the public repository.
+
+
+### File Manager replaces Calculator — 286 diagnostic images (2026-10-20)
+
+After a dedicated Calculator-as-Windows-shell test immediately displayed `Cannot read from drive A:` on the real Model 50Z, we decided to replace Calculator rather than spend more memory and disk space on it. Two images were built from the **Clock-working, Windows 3.1 Program Manager, small PS/2 mouse, no-DOS=HIGH** version:
+
+| Test image | Change | Free FAT12 space |
+| --- | --- | ---: |
+| `WIN31DSK_286_FileManager_4Apps_286_TEST.img` | Removes CALC.EXE; adds **Windows 3.0 WINFILE.EXE** (106,288 bytes), and replaces Calculator Program Manager item with **File Manager** using an authentic Windows 3.0-derived icon | 1,536 bytes |
+| `WIN31DSK_286_FileManager_4Apps_ExtraSpace_TEST.img` | Same, but also removes WIN87EM.DLL (not directly imported by any remaining bundled Win16 application) | 14,336 bytes |
+
+**Neither image has been hardware-tested.** Both preserve Windows 3.1 Program Manager, Solitaire, Minesweeper, Reversi, original Windows 3.0 Clock plus registered DIGITAL.FON, smaller PS/2 native mouse, `ASSIGN B=A`, `WIN /S`, and the no-`DOS=HIGH` configuration. The 3.0 File Manager imports `SYSTEM`, `KERNEL`, `GDI`, `USER`, and `KEYBOARD`; all are present. Both images have byte-valid application files, mirrored FATs, no cluster cross-links/orphans, and a verified checksum for the modified Program Manager group. The extra-space variant may fail to run third-party applications requiring floating-point emulation; preserve the DLL in the primary edition.
+
+**DOS Prompt within Windows:** Standard Mode on an 80286 needs `WINOLDAP.MOD` and VGA `.2GR` support to launch DOS applications from Program Manager; these support files aren't on the small floppy and won't fit alongside File Manager. An icon pointing at `COMMAND.COM` alone would not be reliable, so no such icon was added. Instead use **Program Manager → File → Exit Windows** to reach DOS `A:\>`, then `WIN /S` to restart Windows. File Manager can browse DOS-recognized `C:`, `D:`, etc. drives and launch compatible Win16 programs, subject to dependencies and available RAM. A physical second floppy drive `B:` would require changing the startup `ASSIGN B=A` alias.
+
+This experiment should not be promoted to a stable build until File Manager, Clock, games, and any read-error behavior are verified on the real PS/2. Original Microsoft IMG binaries are not committed to this public repository.
