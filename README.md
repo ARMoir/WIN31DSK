@@ -61,3 +61,14 @@ The script verifies floppy size, mirrored FAT tables, core DOS/Windows files, an
 A physical PS/2 test of an earlier direct-SkiFree floppy showed `Error loading DISPLAY.DRV` after A:/B: swap prompts. The `DISPLAY.DRV` binary in that image is byte-identical to the file in a Task List variant that reached Windows successfully, so **do not assume the VGA driver is missing**. Possible causes include an intermittent floppy read, an unsatisfied drive-swap request, or a Windows startup failure. The ASSIGN-enabled edition has **not** yet been tested against this error.
 
 At the DOS prompt test `DIR A:\DISPLAY.DRV` and `COPY A:\DISPLAY.DRV NUL` (the second command reads the whole file). If a data or CRC error occurs, rewrite the image to a different 1.44 MB floppy and verify the write. A good DOS file read does not guarantee Windows can initialize the driver; if the error persists, use a known-working boot image and compare the startup files, one change at a time.
+
+
+### GDI.EXE relocated-file diagnostic (2026-10-19)
+
+The first build confirmed to reach File Manager was `PS2_50Z_Win31_286_SkiFree_FIXED.img`. Subsequent low-memory builds failed with `Error loading GDI.EXE`, and `COPY A:\GDI.EXE NUL` returned a disk read error on the Model 50Z.
+
+A comparison found **identical GDI.EXE bytes** in the working and failing IMG files (SHA-256 `6d28146961ab4733e167b1657289206ce16a856e431f843e4ee3d504836dfb6f`). The file was also located in the same FAT12 clusters (314–745) in both images.
+
+A separate experimental test image, `WIN31DSK_LowMemory_SkiFree_GDI_Relocated.img`, preserves the existing low-memory SkiFree/ASSIGN build but takes `GDI.EXE` from the first working image and **moves all 432 of its FAT12 clusters to previously unused locations** (starting at 1863; no overlap with the original clusters). All other file contents, the DOS boot sector, and the startup settings are unchanged. This does not establish that the previous GDI bytes were bad. It tests whether different physical floppy locations change the read result.
+
+**Not yet tested on the real PS/2.** The last part of relocated GDI uses late disk tracks, so reliable media and write verification are important. Keep the earlier working image as a fallback.
