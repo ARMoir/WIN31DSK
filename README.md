@@ -6,7 +6,7 @@ This project started with an original IBM PS/2 Model 50Z and a simple question: 
 
 The answer is a working Windows 3.1 **Standard Mode** desktop with Program Manager, three games, two accessories, a PS/2 mouse, and a surprisingly tidy VGA layout. No hard disk or RAM upgrade required.
 
-> **Tested on real hardware, not just an emulator.** The preferred Notepad edition has been booted and its desktop layout and Notepad confirmed on the PS/2. Games, Clock, and mouse support were also tested during development; see [the build notes](builds/README.md) for the precise testing history.
+> **Assembled on a modern computer; tested on real vintage hardware.** The floppy images were created and optimized off-machine, then written to physical disks and tested on the original IBM PS/2 Model 50Z. The preferred Notepad edition booted, its desktop layout looked right, and Notepad launched on the PS/2. Games, Clock, and mouse support were also tested during development; see [the build notes](builds/README.md) for the precise testing history.
 
 ## The machine
 
@@ -95,4 +95,4 @@ The complete floppy images incorporate Microsoft MS-DOS 6.22, Windows 3.x, and o
 
 ---
 
-*Built and tested on a real IBM PS/2 Model 50Z. Retro hardware has a way of making every kilobyte count.*
+*Created on modern hardware and tested on a real IBM PS/2 Model 50Z. Retro hardware has a way of making every kilobyte count.*
