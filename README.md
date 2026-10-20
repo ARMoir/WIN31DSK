@@ -104,3 +104,21 @@ The resulting 1.44 MB image has **32,768 bytes free** (SHA-256 `4ef615690259819f
 
 A contemporary description of the logo-free launcher: [1995 Windows 3.1 startup-logo discussion](https://groups.google.com/g/bit.listserv.win3-l/c/Iq_rjl2-Ekc).
 
+
+## Five-app build with authentic Windows 3.0 Clock (2026-10-19)
+
+The `W3.zip` installed Windows 3.0 archive provided by the user has `CLOCK.EXE` (11,136 bytes) and `DIGITAL.FON` (1,712 bytes). Inspection of its NE imports confirmed the clock requires only `KERNEL`, `USER`, and `GDI`—unlike the Windows 3.1 Clock, it does **not** import the `COMMDLG.DLL` that cannot fit alongside our other programs.
+
+The new experimental `WIN31DSK_5Apps_Win30Clock_FullFont_286_BETA.img` is based on the corrected no-splash Program Manager image and contains:
+
+| Games | Applications |
+| --- | --- |
+| Solitaire | Calculator |
+| Minesweeper | Clock (Windows 3.0 + DIGITAL.FON) |
+| Reversi | |
+
+It removes Character Map, replaces Windows 3.1 Clock with Windows 3.0 Clock, and adds DIGITAL.FON. **58,880 bytes remain free** on the 1,474,560-byte floppy. It retains the DOS 6.22 boot components, `ASSIGN.COM B=A`, relocated known-working `GDI.EXE`, no-splash loader, `COMM.DRV`, and Task List. All other game and application executable bytes are preserved. **This edition still needs testing on the real 286.**
+
+Because Reversi previously displayed a Windows `Cannot read from drive A:` message after drawing its board, a separate diagnostic `WIN31DSK_5Apps_Win30Clock_ReversiRelocated_286_BETA.img` keeps everything identical except the unchanged Reversi EXE is stored on another contiguous cluster chain (starting at cluster 2721 instead of 3). That is a media/placement experiment, **not a verified fix**, and should only be used if the standard edition has a reproducible read problem. The original Reversi executable is the same Windows 3.0 binary in the W3 archive.
+
+These IMG builds contain proprietary Microsoft binaries and are not committed to this public repository; please build from your own licensed source files.
