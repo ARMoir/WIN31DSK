@@ -211,3 +211,19 @@ After a dedicated Calculator-as-Windows-shell test immediately displayed `Cannot
 **DOS Prompt within Windows:** Standard Mode on an 80286 needs `WINOLDAP.MOD` and VGA `.2GR` support to launch DOS applications from Program Manager; these support files aren't on the small floppy and won't fit alongside File Manager. An icon pointing at `COMMAND.COM` alone would not be reliable, so no such icon was added. Instead use **Program Manager → File → Exit Windows** to reach DOS `A:\>`, then `WIN /S` to restart Windows. File Manager can browse DOS-recognized `C:`, `D:`, etc. drives and launch compatible Win16 programs, subject to dependencies and available RAM. A physical second floppy drive `B:` would require changing the startup `ASSIGN B=A` alias.
 
 This experiment should not be promoted to a stable build until File Manager, Clock, games, and any read-error behavior are verified on the real PS/2. Original Microsoft IMG binaries are not committed to this public repository.
+
+
+### Notepad replaces unreliable File Manager; tidy VGA Program Manager layout (2026-10-20)
+
+Hardware follow-up: Both previous File Manager images had `Cannot read from drive A:` errors when opening File Manager (the more spacious version otherwise worked), so File Manager has been removed from this experiment. Calculator had previously failed due to memory errors, including when attempted as the Windows shell.
+
+New **not yet hardware-tested** `WIN31DSK_286_Notepad_CleanLayout_TEST.img`, built from the hardware-confirmed **Clock-working** `WIN31DSK_5Apps_Clock_SmallMouse_NoDOSHIGH_286_TEST.img`:
+- Remove `CALC.EXE` (43,072 bytes); add original Windows 3.0 `NOTEPAD.EXE` (31,936 bytes; imports `KERNEL`, `GDI`, `USER`, `KEYBOARD`, all available).
+- Preserve native Windows 3.1 **PROGMAN.EXE**, all three games, Windows 3.0 Clock and font registration, the working 4,896-byte Windows 3.0 PS/2 mouse driver, `WIN87EM.DLL`, the `ASSIGN B=A` drive-alias fix, and the **no-`DOS=HIGH`** DOS configuration.
+- Rename Calculator program group item to **Notepad**, with command `A:\NOTEPAD.EXE` and a 1-bit monochrome icon derived from the authentic 1990 Windows 3.0 icon in `ACCESSOR.GRP`.
+- Arrange Games and Applications group windows into **two separate full-width rows** at 640×480 VGA using original `.GRP` rectangle fields (Games: 20,15–612,192; Applications: 20,205–612,397).
+- Explicitly enable `WIN.INI` `[Desktop]` options `IconSpacing=88`, `IconTitleWrap=1`, `IconTitleSize=8` and keep `PROGMAN.INI` `AutoArrange=1`, `SaveSettings=0` for a repeatable clean boot.
+- 75,776 bytes of floppy space free; 40 files; FAT12 mirrors, file chains, and `.GRP` checksums validated. Only `WIN.INI`, `APPS.GRP`, `GAMES.GRP`, deleted `CALC.EXE`, and added `NOTEPAD.EXE` differ at the file-content level from the Clock-working source.
+- SHA-256: `3963c37e53ef658557138b7f3674503e0f8d862dbb1998a7df1769c8d7408d1a`
+
+**Hardware test still needed:** check both group windows and icon labels, launch Notepad, then Clock, then games. A DOS read error is not excluded by the filesystem validation. No copyrighted IMG files are committed to this repo.
