@@ -72,3 +72,19 @@ A comparison found **identical GDI.EXE bytes** in the working and failing IMG fi
 A separate experimental test image, `WIN31DSK_LowMemory_SkiFree_GDI_Relocated.img`, preserves the existing low-memory SkiFree/ASSIGN build but takes `GDI.EXE` from the first working image and **moves all 432 of its FAT12 clusters to previously unused locations** (starting at 1863; no overlap with the original clusters). All other file contents, the DOS boot sector, and the startup settings are unchanged. This does not establish that the previous GDI bytes were bad. It tests whether different physical floppy locations change the read result.
 
 **Not yet tested on the real PS/2.** The last part of relocated GDI uses late disk tracks, so reliable media and write verification are important. Keep the earlier working image as a fallback.
+
+## Experimental six-app Program Manager floppy (2026-10-19)
+
+A later build derived from the original hardware-tested Program Manager edition includes two separate groups:
+
+| Games | Applications |
+| --- | --- |
+| Solitaire | Calculator |
+| Minesweeper | Clock |
+| Reversi (from the original Windows 3.0 executable) | Character Map |
+
+The image is **1,474,560 bytes** with **2,048 bytes free**. The user-provided `REVERSI.EXE` is 16,688 bytes and imports only `KERNEL`, `USER`, and `GDI`, which are already present. The optional `REVERSI.HLP` is omitted to fit.
+
+To make room while preserving the previously working applications, `TASKMAN.EXE` and `COMM.DRV` were removed, and `[boot] comm.drv=` was set blank. This disables Windows serial communications and the separate Task List utility, but not Program Manager or DOS itself. The original DOS boot files, relocated `GDI.EXE`, `ASSIGN.COM B=A`, and other application binaries remain unchanged.
+
+**Hardware test pending:** Reversi has not yet been verified on the Model 50Z. Clock also remains experimental because `COMMDLG.DLL` cannot fit. The actual IMG is intentionally **not committed to this public repository**, because it contains proprietary Microsoft executables. Owners should use their own licensed source files.
