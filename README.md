@@ -1,3 +1,17 @@
+## Current hardware-tested baseline (2026-10-20)
+
+**Confirmed by the owner on the actual IBM PS/2 Model 50Z:** the `WIN31DSK_5Apps_Clock_DOS_HIGH_MOUSE30_286_TEST.img` edition boots Windows 3.1 successfully with the **smaller Windows 3.0 native PS/2 mouse driver** functioning normally. The user reports the five-application desktop appears to be working.
+
+- Original **10 MHz Intel 80286**, **2 MB RAM**, **one 1.44 MB floppy**, **no hard drive**.
+- MS-DOS 6.22 with `DOS=HIGH`; Windows 3.1 **Standard Mode** with Program Manager.
+- Two Program Manager groups: **Games** (Solitaire, Minesweeper, Reversi) and **Applications** (Calculator, Windows 3.0 Clock plus DIGITAL.FON).
+- DOS logical floppy alias handled by `ASSIGN.COM B=A`; smaller Windows 3.0 `MOUSE.DRV` is working on the actual machine.
+- The earlier `Cannot read from drive A:` gameplay issue means extended gameplay/read reliability should still be assessed; this status represents **reported success in current testing**, not a completed long-duration stress test.
+
+This is the **preferred hardware-tested configuration** going forward; keep the previously confirmed SkiFree/Program Manager images as backups. The binary IMG contains copyrighted DOS/Windows components and is not distributed by this public source repository.
+
+---
+
 # WIN31DSK — Windows 3.1 from one floppy on an IBM PS/2 Model 50Z
 
 Experimental, **286-compatible** MS-DOS 6.22 / Windows 3.1 **1.44 MB** floppy builds for an original 10 MHz IBM PS/2 Model 50Z with 2 MB of RAM. Each contains the original 16-bit SkiFree.
