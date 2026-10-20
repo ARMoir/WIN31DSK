@@ -175,3 +175,23 @@ Confirmed directly in the image: `DIGITAL.FON` (1,712 bytes) is present and `WIN
 SHA-256: `7ced4cf3a91777e7092cc52f342e1a573d277255fd6036a41f725503f4f7c9c1`.
 
 **Status: testing on the actual PS/2 is pending.** This isolates the DOS=HIGH variable after Calculator reported insufficient memory and Clock raised a GDI protection fault in the optimized image. It does not establish that DOS=HIGH caused either issue. Test Calculator first after a cold boot; test Clock first after a separate cold boot, then longer gameplay to check for read errors. The IMG contains proprietary components and is not hosted in this public repository.
+
+
+### Calculator insufficient-memory investigation (2026-10-20)
+
+Real hardware update: On the smaller Windows 3.0 mouse / **no DOS=HIGH** five-app build, **Clock is working again**, and the games work, but Windows 3.1 `CALC.EXE` reports **insufficient memory even when launched first**. No proof this is caused solely by Calculator's code; the 2 MB system and Program Manager memory overhead are suspects.
+
+Compared user-provided Windows 3.0 installed executables:
+
+| Component | Win 3.1 | Win 3.0 | Disk allocation saved |
+| --- | ---: | ---: | ---: |
+| `CALC.EXE` | 43,072 bytes | 40,480 bytes | 2,560 bytes |
+| `PROGMAN.EXE` | 115,312 bytes | 55,200 bytes | 60,416 bytes |
+
+The older Calculator's declared NE heap and stack requirements are **the same** as the 3.1 one (2,048 / 6,144 bytes), so swapping Calculator alone may not make much difference. The older Program Manager is more promising for memory pressure, but there is no guarantee its group-file handling and 3.1 API calls are compatible.
+
+Two FAT12-validated, **not yet hardware-tested** experimental IMG variants were built from the exact `WIN31DSK_5Apps_Clock_SmallMouse_NoDOSHIGH_286_TEST.img` baseline:
+- `WIN31DSK_286_Win30Calculator_Only_TEST.img` changes only `CALC.EXE` to the 3.0 version (67,072 free bytes).
+- `WIN31DSK_286_Win30ProgramManager_And_Calculator_TEST.img` changes both `CALC.EXE` and `PROGMAN.EXE` to 3.0 versions (127,488 free bytes).
+
+Both preserve the DOS boot files, floppy A:/B: mapping, no-DOS=HIGH startup, smaller Windows 3.0 mouse driver, proven Clock font configuration, relocated `GDI.EXE`, and every other executable byte-for-byte at the same starting sectors. FAT mirrors, chains, and orphan/cross-link checks passed. **Test the Calculator-only version first**, then the reduced Program Manager variant if it still gives insufficient memory. Keep the currently Clock-working image as fallback. The proprietary IMG files are not committed to the public repository.
