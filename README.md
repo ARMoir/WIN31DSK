@@ -1,6 +1,6 @@
 ## Current hardware-tested baseline (2026-10-20)
 
-**Confirmed by the owner on the actual IBM PS/2 Model 50Z:** the `WIN31DSK_5Apps_Clock_DOS_HIGH_MOUSE30_286_TEST.img` edition boots Windows 3.1 successfully with the **smaller Windows 3.0 native PS/2 mouse driver** functioning normally. The user reports the five-application desktop appears to be working.
+**Partially confirmed on the actual IBM PS/2 Model 50Z:** `WIN31DSK_5Apps_Clock_DOS_HIGH_MOUSE30_286_TEST.img` boots Windows 3.1 successfully and the **smaller Windows 3.0 native PS/2 mouse driver and games operate**. Later testing exposed two regressions: Calculator gives **"Insufficient memory to run this application"**, and Clock gives **a GDI.EXE general protection fault at 0019:0051**. **Do not regard this optimized image as fully working yet.** The earlier `WIN31DSK_5Apps_Win30Clock_FontRegistered_286_TEST.img` reportedly ran Clock successfully. Suspects include memory pressure, different Windows runtime state, or an image/configuration difference; no root cause established. Test Calculator immediately after a cold boot; on a separate fresh boot test Clock first. Then compare a DOS=HIGH-only build and a small-mouse-only build against the font-registered baseline.
 
 - Original **10 MHz Intel 80286**, **2 MB RAM**, **one 1.44 MB floppy**, **no hard drive**.
 - MS-DOS 6.22 with `DOS=HIGH`; Windows 3.1 **Standard Mode** with Program Manager.
@@ -8,7 +8,7 @@
 - DOS logical floppy alias handled by `ASSIGN.COM B=A`; smaller Windows 3.0 `MOUSE.DRV` is working on the actual machine.
 - The earlier `Cannot read from drive A:` gameplay issue means extended gameplay/read reliability should still be assessed; this status represents **reported success in current testing**, not a completed long-duration stress test.
 
-This is the **preferred hardware-tested configuration** going forward; keep the previously confirmed SkiFree/Program Manager images as backups. The binary IMG contains copyrighted DOS/Windows components and is not distributed by this public source repository.
+This is an **experimental performance variant, not the final baseline**. Keep the previously successful SkiFree/Program Manager images and the Clock-working font-registered build as backups until the regressions are resolved. The binary IMG contains copyrighted DOS/Windows components and is not distributed by this public source repository.
 
 ---
 
