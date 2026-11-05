@@ -69,6 +69,34 @@ jobs:
           cd output
           sha256sum -c TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img.sha256
 
+      - name: Create controlled Windows mouse startup A/B tests
+        run: |
+          python3 tools/tandy30/diagnostic_variants.py \
+            output/TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img output
+          cd output
+          sha256sum -c TANDY1000EX_WIN30_DOSMOUSE_WIN_NOMOUSE_CF_31808S.img.sha256
+          sha256sum -c TANDY1000EX_WIN30_MSSYS_NO_DOSMOUSE_CF_31808S.img.sha256
+
+      - name: Upload DOS mouse with original Windows no-mouse driver
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY30_DOSMOUSE_WIN_NOMOUSE_BOOTTEST
+          path: |
+            output/TANDY1000EX_WIN30_DOSMOUSE_WIN_NOMOUSE_CF_31808S.img
+            output/TANDY1000EX_WIN30_DOSMOUSE_WIN_NOMOUSE_CF_31808S.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Windows Mouse Systems driver without DOS mouse
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY30_MSSYS_NO_DOSMOUSE_BOOTTEST
+          path: |
+            output/TANDY1000EX_WIN30_MSSYS_NO_DOSMOUSE_CF_31808S.img
+            output/TANDY1000EX_WIN30_MSSYS_NO_DOSMOUSE_CF_31808S.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Publish flashable image and standalone diagnostics
         uses: actions/upload-artifact@v4
         with:
