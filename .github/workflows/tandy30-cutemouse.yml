@@ -2,6 +2,12 @@ name: Tandy 1000 EX Windows 3.0 + CuteMouse (V20 test)
 
 on:
   workflow_dispatch:
+    inputs:
+      original_mouse_drv_url:
+        description: 'Optional HTTPS URL to the uncompressed original 4,896-byte Windows 3.0 MOUSE.DRV (SHA-256 verified)'
+        required: false
+        type: string
+        default: ''
   push:
     branches: [TANDY30]
     paths:
@@ -111,25 +117,30 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Download checksum-pinned Windows 3.0 installation media for INT33 driver
+      - name: Obtain checksum-pinned original Windows 3.0 mouse driver
         if: github.event_name == 'workflow_dispatch'
+        env:
+          DRIVER_URL: ${{ inputs.original_mouse_drv_url }}
         run: |
-          # Both official WinWorld mirrors serve the same checksum-pinned archive.
-          curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
-            --referer "https://winworldpc.com/" \
-            "https://dl.winworldpc.com/Microsoft%20Windows%203.0%20(3.5%20720K).7z" \
-            -o output/WIN30_720K.7z || \
-          curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
-            --referer "https://winworldpc.com/" \
-            "https://dl-alt1.winworldpc.com/Microsoft%20Windows%203.0%20(3.5%20720K).7z" \
-            -o output/WIN30_720K.7z
-          echo "b04d4a0021183c67081c833425ea8d5ba89c30c3228a0dc742bcf4225f90bb8e5576506ce4dac395820b18cdd0950c6c25497e8d986edb25df13bf10821e1bb0  output/WIN30_720K.7z" | sha512sum -c -
-          mkdir -p output/win30-install-media
-          7z x -y -ooutput/win30-install-media output/WIN30_720K.7z > /dev/null
-          DISK2="$(find output/win30-install-media -type f -iname 'DISK02.IMG' -print -quit)"
-          test -n "$DISK2"
-          mcopy -i "$DISK2" ::/MOUSE.DRV output/WIN30_MOUSE.SZDD
-          python3 tools/tandy30/int33-test/decompress_szdd.py output/WIN30_MOUSE.SZDD output/WIN30_MOUSE_ORIGINAL.DRV
+          if [ -n "$DRIVER_URL" ]; then
+            curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
+              "$DRIVER_URL" -o output/WIN30_MOUSE_ORIGINAL.DRV
+          else
+            # Windows 3.0 720K archive from the two official mirrors.
+            curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
+              "https://dl.winworldpc.com/Microsoft%20Windows%203.0%20(3.5%20720K).7z" \
+              -o output/WIN30_720K.7z || \
+            curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
+              "https://dl-alt1.winworldpc.com/Microsoft%20Windows%203.0%20(3.5%20720K).7z" \
+              -o output/WIN30_720K.7z
+            echo "b04d4a0021183c67081c833425ea8d5ba89c30c3228a0dc742bcf4225f90bb8e5576506ce4dac395820b18cdd0950c6c25497e8d986edb25df13bf10821e1bb0  output/WIN30_720K.7z" | sha512sum -c -
+            mkdir -p output/win30-install-media
+            7z x -y -ooutput/win30-install-media output/WIN30_720K.7z > /dev/null
+            DISK2="$(find output/win30-install-media -type f -iname 'DISK02.IMG' -print -quit)"
+            test -n "$DISK2"
+            mcopy -i "$DISK2" ::/MOUSE.DRV output/WIN30_MOUSE.SZDD
+            python3 tools/tandy30/int33-test/decompress_szdd.py output/WIN30_MOUSE.SZDD output/WIN30_MOUSE_ORIGINAL.DRV
+          fi
           echo "8ca171370b9b51a1c642ec2a03363f1e30f675733078b91b8eaf34a8299fe476  output/WIN30_MOUSE_ORIGINAL.DRV" | sha256sum -c -
 
       - name: Patch Windows mouse for proven CuteMouse DOS INT33 interface
