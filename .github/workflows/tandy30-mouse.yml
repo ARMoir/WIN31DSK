@@ -21,7 +21,7 @@ jobs:
       - name: Install FAT image tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y mtools libmspack-dev gcc
+          sudo apt-get install -y mtools libmspack-dev gcc binutils
       - name: Build KWAJ extraction utility
         run: |
           mkdir -p output
@@ -33,12 +33,18 @@ jobs:
           python3 tools/tandy30/shrink_cf.py \
             builds/TANDY1000EX_WIN30_NOGAMES_16MB.img \
             output/TANDY1000EX_WIN30_CF_BASE.img
+      - name: Assemble 8086-compatible DOS mouse diagnostic
+        run: |
+          as --32 -o output/mtest.o tools/tandy30/mtest.s
+          ld -m elf_i386 -Ttext 0x100 --oformat binary -o output/MTEST.COM output/mtest.o
+          test "$(stat -c%s output/MTEST.COM)" -le 8192
       - name: Build mouse-enabled CF image
         run: |
           python3 tools/tandy30/build_mouse.py \
             output/TANDY1000EX_WIN30_CF_BASE.img \
             output/MOUSE.DRV \
-            output/TANDY1000EX_WIN30_MOUSE_CF_31808S.img
+            output/TANDY1000EX_WIN30_MOUSE_CF_31808S.img \
+            --dos-test output/MTEST.COM
       - name: Upload image and checksum
         uses: actions/upload-artifact@v4
         with:
@@ -46,5 +52,6 @@ jobs:
           path: |
             output/TANDY1000EX_WIN30_MOUSE_CF_31808S.img
             output/TANDY1000EX_WIN30_MOUSE_CF_31808S.img.sha256
+            output/MTEST.COM
           if-no-files-found: error
           retention-days: 30
