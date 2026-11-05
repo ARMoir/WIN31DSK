@@ -45,3 +45,43 @@ The program clears to an 80-column text display, reports the BIOS COM1/COM2 base
 BIOS COM port values of `0000` mean no port is recorded at that BIOS-data-area entry, which is not conclusive proof that an expansion-port serial adapter is missing. Typical standard addresses are COM1=03F8 and COM2=02F8.
 
 No actual Tandy hardware test is performed by the workflow. The image remains sized to the card's exact 31,808 sectors.
+
+## Experimental CuteMouse 2.1 beta 4 V20 build
+
+A **separate** [TANDY30 CuteMouse workflow](../../.github/workflows/tandy30-cutemouse.yml) creates `TANDY1000EX_WIN30_CTMOUSE_CF_31808S.img` (exactly **31,808 sectors**, 16,285,696 bytes). The original baseline and the earlier Microsoft-mouse test build remain untouched.
+
+The workflow compiles [Davide Bresolin's 8086-compatible CuteMouse 2.1b4 fork](https://github.com/davidebreso/ctmouse) at pinned commit `0dd8f324bd465376ec3778c785f33398bf909619` with [JWasm](https://github.com/Baron-von-Riedesel/JWasm) at pinned commit `0a1008d696109a83d2b02cda90853b0a96218c0e`. It builds with `-0` for the 8086 instruction set (suitable for NEC V20) and includes its GPL license, source links, and a standalone `CTMOUSE.EXE` in the Actions artifact.
+
+The image includes:
+- `C:\\CTMOUSE.EXE`, the newly built DOS driver.
+- `C:\\MTEST.COM`, the existing INT 33h mouse test.
+- Windows 3.0's `MOUSE.DRV` from the pinned Microsoft Mouse 9.01 archive.
+- `CONFIG.SYS` with the old `devicehigh=\\mouse\\mouse.sys` line **commented out**. CuteMouse is **not loaded automatically**, so a failed driver cannot strand you at boot.
+
+### Real-hardware test (Dexxa M-DX800S, COM1, IRQ4)
+
+Boot the new image, stop at the DOS prompt, and enter:
+
+```dos
+C:\\>CTMOUSE /S14
+C:\\>MTEST
+```
+
+The `/S14` argument forces COM1, IRQ4. Move and click; `MTEST` should report a detected driver and changing X/Y/button values. If that works, exit `MTEST` with Esc or Q and try `WIN` to see whether Windows 3.0 can use the pointer.
+
+If CuteMouse fails to detect the Dexxa, **reboot** and try the Mouse Systems mode:
+
+```dos
+C:\\>CTMOUSE /S14 /M
+C:\\>MTEST
+```
+
+**Important correction:** In CuteMouse 2.1b4, `/M` enables Mouse Systems detection; `/Y` is deliberately ignored for backwards compatibility. The source's option table confirms this.
+
+You can also copy just the standalone `CTMOUSE.EXE` from the Actions artifact onto your existing DOS CF image for a quick trial, but for a clean comparison use the new image so `CONFIG.SYS` does not load Microsoft `MOUSE.SYS`.
+
+The Mouse Systems switch is a *detection* option. The mouse's physical MC/PC switch still determines what serial protocol it actually sends. If both modes fail, the next useful test is a raw COM1 serial-byte probe, comparing data with the working ELKS configuration (typically 1200 baud). No mouse behavior is claimed until confirmed on the Tandy.
+
+### Rebuilding
+
+Actions → **Tandy 1000 EX Windows 3.0 + CuteMouse (V20 test)** → Run workflow (branch `TANDY30`). Download the artifact `TANDY1000EX_WIN30_CTMOUSE_CF_31808S`, extract it, and flash the `.img`. Keep the original CF card as a fallback.
