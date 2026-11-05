@@ -28,18 +28,23 @@ jobs:
           gcc -Wall -Wextra -Werror -O2 tools/tandy30/expand_kwaj.c -lmspack -o output/expand_kwaj
       - name: Download and expand Microsoft Mouse 9.01 Windows driver
         run: python3 tools/tandy30/prepare_msm901.py output/MOUSE.DRV
-      - name: Build mouse-enabled 16 MiB image
+      - name: Resize baseline to physical CF card capacity (31808 sectors)
+        run: |
+          python3 tools/tandy30/shrink_cf.py \
+            builds/TANDY1000EX_WIN30_NOGAMES_16MB.img \
+            output/TANDY1000EX_WIN30_CF_BASE.img
+      - name: Build mouse-enabled CF image
         run: |
           python3 tools/tandy30/build_mouse.py \
-            builds/TANDY1000EX_WIN30_NOGAMES_16MB.img \
+            output/TANDY1000EX_WIN30_CF_BASE.img \
             output/MOUSE.DRV \
-            output/TANDY1000EX_WIN30_MOUSE_16MB.img
+            output/TANDY1000EX_WIN30_MOUSE_CF_31808S.img
       - name: Upload image and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: TANDY1000EX_WIN30_MOUSE_16MB
+          name: TANDY1000EX_WIN30_MOUSE_CF_31808S
           path: |
-            output/TANDY1000EX_WIN30_MOUSE_16MB.img
-            output/TANDY1000EX_WIN30_MOUSE_16MB.img.sha256
+            output/TANDY1000EX_WIN30_MOUSE_CF_31808S.img
+            output/TANDY1000EX_WIN30_MOUSE_CF_31808S.img.sha256
           if-no-files-found: error
           retention-days: 30
