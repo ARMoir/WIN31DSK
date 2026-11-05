@@ -81,7 +81,7 @@ def main():
         if args.mouse_systems_driver:
             # Windows Setup's mouse description is informational only.
             updated = re.sub(
-                r"(?im)^(\\s*mouse\\.drv\\s*=).*Mouse.*$",
+                r"(?im)^([ \t]*mouse\.drv[ \t]*=).*Mouse.*$",
                 lambda m: m.group(1) + "Mouse Systems (or VisiOn) on COM1",
                 updated, count=1,
             ) if "[boot.description]" in updated.lower() else updated
@@ -91,7 +91,7 @@ def main():
         mcopy(args.output, ini, "::/WINDOWS/SYSTEM.INI")
         check = temp / "CHECK.INI"
         read_dos(args.output, "::/WINDOWS/SYSTEM.INI", check)
-        if not re.search(rb"(?im)^mouse\\.drv\\s*=\\s*" + re.escape(mouse_name.encode("ascii")) + rb"\\s*$", check.read_bytes()):
+        if not re.search(rb"(?im)^mouse\.drv\s*=\s*" + re.escape(mouse_name.encode("ascii")) + rb"\s*$", check.read_bytes()):
             raise SystemExit("Failed to verify Windows mouse driver activation")
         readback = temp / "VERIFY.DRV"
         read_dos(args.output, "::/WINDOWS/SYSTEM/MOUSE.DRV", readback)
@@ -150,11 +150,11 @@ def main():
             read_dos(args.output, "::/AUTOEXEC.BAT", autoexec)
             auto_lines = autoexec.read_bytes().decode("cp437").splitlines()
             path_lines = [i for i, line in enumerate(auto_lines)
-                          if re.match(r"(?i)^\\s*PATH\\s*(?:=|\\s+)", line)]
+                          if re.match(r"(?i)^\s*PATH\s*(?:=|\s+)", line)]
             if len(path_lines) != 1:
                 raise SystemExit(f"Expected exactly one PATH line in AUTOEXEC.BAT; got {len(path_lines)}")
             index = path_lines[0]
-            m = re.match(r"(?i)^(\\s*PATH\\s*=\\s*)(.*)$", auto_lines[index])
+            m = re.match(r"(?i)^(\s*PATH\s*=\s*)(.*)$", auto_lines[index])
             if not m:
                 raise SystemExit("Unsupported AUTOEXEC.BAT PATH syntax")
             dirs = [value.strip().rstrip("\\\\").upper()
@@ -164,7 +164,7 @@ def main():
             startup_command = "C:\\\\CTMOUSE.EXE /S14 /M"
             if not any(line.strip().upper() == startup_command for line in auto_lines):
                 auto_lines.append(startup_command)
-            new_autoexec = ("\\r\\n".join(auto_lines) + "\\r\\n").encode("cp437")
+            new_autoexec = ("\r\n".join(auto_lines) + "\r\n").encode("cp437")
             autoexec.write_bytes(new_autoexec)
             mcopy(args.output, autoexec, "::/AUTOEXEC.BAT")
             verify_auto = temp / "AUTO.VER"
