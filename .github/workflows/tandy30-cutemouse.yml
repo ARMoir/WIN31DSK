@@ -1,4 +1,4 @@
-name: Tandy 1000 EX DOS + Windows 3.0 mouse CF image
+name: Tandy 1000 EX DOS and Windows 3.0 mouse CF image
 
 on:
   workflow_dispatch:
@@ -17,61 +17,79 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout TANDY30
+        uses: actions/checkout@v4
 
-      - name: Install build tools
+      - name: Install DOS image build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y mtools libmspack-dev gcc binutils make git
+          sudo apt-get install -y mtools gcc binutils make git
 
-      - name: Compile 8086-compatible CuteMouse for DOS
+      - name: Build pinned 8086-compatible CuteMouse
         run: bash tools/tandy30/build_cutemouse.sh output
 
-      - name: Expand checksum-pinned Microsoft Mouse 9.01 Windows driver
+      - name: Restore ORIGINAL Windows 3.0 MOUSE.DRV from this repository
         run: |
-          gcc -Wall -Wextra -Werror -O2 tools/tandy30/expand_kwaj.c -lmspack -o output/expand_kwaj
-          python3 tools/tandy30/prepare_msm901.py output/MOUSE.DRV
-          echo "ed2510f897a716926a4e9881352b77c8e0921ea9cca37ea820df03dcf3f493ec  output/MOUSE.DRV" | sha256sum -c -
+          mkdir -p output
+          cat tools/tandy30/int33-test/original_mouse.b64.0? | tr -d '\n\r' | base64 --decode | gzip -d > output/WIN30_MOUSE_ORIGINAL.DRV
+          test "$(stat -c%s output/WIN30_MOUSE_ORIGINAL.DRV)" -eq 4896
+          echo "8ca171370b9b51a1c642ec2a03363f1e30f675733078b91b8eaf34a8299fe476  output/WIN30_MOUSE_ORIGINAL.DRV" | sha256sum -c -
 
-      - name: Resize baseline for physical 31808-sector CF
+      - name: Match physical 31808-sector CompactFlash capacity
         run: |
           python3 tools/tandy30/shrink_cf.py \
             builds/TANDY1000EX_WIN30_NOGAMES_16MB.img \
-            output/CF_BASE.img
+            output/TANDY30_CF_BASE.img
 
-      - name: Assemble DOS mouse tester
+      - name: Assemble MTEST for 8086 DOS mouse verification
         run: |
           as --32 -o output/mtest.o tools/tandy30/mtest.s
           ld -m elf_i386 -Ttext 0x100 --oformat binary -o output/MTEST.COM output/mtest.o
+          test "$(stat -c%s output/MTEST.COM)" -le 8192
 
-      - name: Install DOS mouse startup and Windows PATH
+      - name: Enable DOS CuteMouse at startup, preserve normal DOS prompt
         run: |
           python3 tools/tandy30/build_mouse.py \
-            output/CF_BASE.img \
-            output/MOUSE.DRV \
-            output/CF_STAGING.img \
+            output/TANDY30_CF_BASE.img \
+            output/WIN30_MOUSE_ORIGINAL.DRV \
+            output/TANDY30_STAGING.img \
             --dos-test output/MTEST.COM \
             --cutemouse output/CTMOUSE.EXE
 
-      - name: Enable Windows 3.0 real-mode mouse through DOS INT 33h
+      - name: Patch original Windows 3.0 MOUSE.DRV to use working DOS INT 33h
         run: |
           python3 tools/tandy30/int33-test/patch.py \
-            output/CF_STAGING.img \
-            output/MOUSE.DRV \
-            output/TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S.img
+            output/TANDY30_STAGING.img \
+            output/WIN30_MOUSE_ORIGINAL.DRV \
+            output/TANDY1000EX_WIN30_ORIGINAL_INT33_CF_31808S.img
 
-      - name: Verify exact card size and checksum
+      - name: Verify exact CF size, startup configuration and checksum
         run: |
-          test "$(stat -c%s output/TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S.img)" -eq 16285696
+          test "$(stat -c%s output/TANDY1000EX_WIN30_ORIGINAL_INT33_CF_31808S.img)" -eq 16285696
           cd output
-          sha256sum -c TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S.img.sha256
+          sha256sum -c TANDY1000EX_WIN30_ORIGINAL_INT33_CF_31808S.img.sha256
+          mcopy -i "TANDY1000EX_WIN30_ORIGINAL_INT33_CF_31808S.img@@32256" ::/AUTOEXEC.BAT VERIFY_AUTOEXEC.BAT
+          mcopy -i "TANDY1000EX_WIN30_ORIGINAL_INT33_CF_31808S.img@@32256" ::/WINDOWS/SYSTEM.INI VERIFY_SYSTEM.INI
+          mcopy -i "TANDY1000EX_WIN30_ORIGINAL_INT33_CF_31808S.img@@32256" ::/WINDOWS/SYSTEM/MOUSE.DRV VERIFY_MOUSE.DRV
+          echo "87f892abc191f9d947cf4f62071e817d7f189d3f1ffc5be2e78255ddd4564399  VERIFY_MOUSE.DRV" | sha256sum -c -
+          python3 - <<'PY'
+          from pathlib import Path
+          a = Path('VERIFY_AUTOEXEC.BAT').read_bytes().upper()
+          s = Path('VERIFY_SYSTEM.INI').read_bytes().upper()
+          assert b'C:\\CTMOUSE.EXE /S14 /M' in a
+          assert b'C:\\WINDOWS' in a
+          assert b'MOUSE.DRV=MOUSE.DRV' in s
+          assert b'DISPLAY.DRV=TANDYDSP.' in s
+          assert not any(line.strip().startswith((b'WIN', b'CALL WIN')) for line in a.splitlines())
+          print('DOS CuteMouse autoload verified; Windows manual launch only; Tandy display preserved')
+          PY
 
-      - name: Publish ONE bootable CF image
+      - name: Upload ONE flashable CF image
         uses: actions/upload-artifact@v4
         with:
-          name: TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S
+          name: TANDY1000EX_WIN30_ORIGINAL_INT33_CF_31808S
           path: |
-            output/TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S.img
-            output/TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S.img.sha256
+            output/TANDY1000EX_WIN30_ORIGINAL_INT33_CF_31808S.img
+            output/TANDY1000EX_WIN30_ORIGINAL_INT33_CF_31808S.img.sha256
           if-no-files-found: error
           retention-days: 30
