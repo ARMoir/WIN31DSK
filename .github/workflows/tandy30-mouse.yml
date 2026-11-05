@@ -2,13 +2,6 @@ name: Tandy 1000 EX Windows 3.0 mouse image
 
 on:
   workflow_dispatch:
-  push:
-    branches: [TANDY30]
-    paths:
-      - '.github/workflows/tandy30-mouse.yml'
-      - 'tools/tandy30/**'
-      - 'drivers/tandy30/**'
-      - 'builds/TANDY1000EX_WIN30_NOGAMES_16MB.img'
 
 permissions:
   contents: read
