@@ -46,6 +46,7 @@ def main():
     parser.add_argument("mouse_driver", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--dos-test", type=Path, help="8086-compatible MTEST.COM to install at C:\\MTEST.COM")
+    parser.add_argument("--cutemouse", type=Path, help="8086-compatible CTMOUSE.EXE; disable legacy MOUSE.SYS startup line")
     args = parser.parse_args()
     if not args.mouse_driver.is_file():
         raise SystemExit(
@@ -96,6 +97,34 @@ def main():
             if test_copy.read_bytes() != tester:
                 raise SystemExit("DOS mouse test program did not round-trip correctly")
             print(f"Installed DOS mouse tester C:\\MTEST.COM ({len(tester)} bytes)")
+        if args.cutemouse:
+            cutemouse = args.cutemouse.read_bytes()
+            if len(cutemouse) < 1024 or cutemouse[:2] != b"MZ":
+                raise SystemExit("CTMOUSE.EXE must be a DOS MZ executable")
+            config = temp / "CONFIG.SYS"
+            read_dos(args.output, "::/CONFIG.SYS", config)
+            current_config = config.read_bytes()
+            lines = current_config.decode("cp437").splitlines(keepends=True)
+            pattern = re.compile(r"(?i)^\\s*DEVICE(?:HIGH)?\\s*=\\s*(?:[A-Z]:)?\\\\MOUSE\\\\MOUSE\\.SYS(?:\\s|$)")
+            hits = [i for i, line in enumerate(lines) if pattern.match(line)]
+            if len(hits) != 1:
+                raise SystemExit(f"Expected one legacy MOUSE.SYS line in CONFIG.SYS, found {len(hits)}")
+            lines[hits[0]] = "REM " + lines[hits[0]]
+            new_config = "".join(lines).encode("cp437")
+            config.write_bytes(new_config)
+            mcopy(args.output, args.cutemouse, "::/CTMOUSE.EXE")
+            mcopy(args.output, config, "::/CONFIG.SYS")
+            verify_driver = temp / "CTVERIFY.EXE"
+            read_dos(args.output, "::/CTMOUSE.EXE", verify_driver)
+            if verify_driver.read_bytes() != cutemouse:
+                raise SystemExit("CTMOUSE.EXE did not round-trip correctly")
+            verify_config = temp / "CONFIG.VER"
+            read_dos(args.output, "::/CONFIG.SYS", verify_config)
+            if verify_config.read_bytes() != new_config or any(
+                pattern.match(line) for line in new_config.decode("cp437").splitlines()
+            ):
+                raise SystemExit("Failed to disable old Microsoft DOS MOUSE.SYS")
+            print("Installed CTMOUSE.EXE, disabled legacy CONFIG.SYS mouse entry; not automatically loaded")
     digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
     args.output.with_name(args.output.name + ".sha256").write_text(
         f"{digest}  {args.output.name}\n", encoding="ascii"
