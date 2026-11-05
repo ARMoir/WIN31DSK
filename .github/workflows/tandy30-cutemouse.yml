@@ -1,4 +1,4 @@
-name: Tandy 1000 EX DOS and Windows 3.0 stock mouse CF image
+name: Tandy 1000 EX Windows 1.04 COM1 mouse trial
 
 on:
   workflow_dispatch:
@@ -35,6 +35,19 @@ jobs:
           test "$(stat -c%s output/WIN30_MOUSE_ORIGINAL.DRV)" -eq 4896
           echo "8ca171370b9b51a1c642ec2a03363f1e30f675733078b91b8eaf34a8299fe476  output/WIN30_MOUSE_ORIGINAL.DRV" | sha256sum -c -
 
+      - name: Restore original Windows 1.04 Mouse Systems COM1 driver
+        run: |
+          base64 -d tools/tandy30/win104_msmouse1.drv.gz.b64 | gzip -d > output/WIN104_MSMOUSE1.DRV
+          test "$(stat -c%s output/WIN104_MSMOUSE1.DRV)" -eq 1966
+          echo "99b3578809422728d64ad4cdbe17361cdde400840167c8d90c7499842c2812b8  output/WIN104_MSMOUSE1.DRV" | sha256sum -c -
+          python3 - <<'PY'
+          from pathlib import Path
+          b = Path("output/WIN104_MSMOUSE1.DRV").read_bytes()
+          assert b[:2] == b"MZ"
+          assert b[int.from_bytes(b[60:64],"little"):][:2] == b"NE"
+          print("Verified Windows 1.04 16-bit NE Mouse Systems COM1 driver")
+          PY
+
       - name: Match physical 31808-sector CompactFlash capacity
         run: |
           python3 tools/tandy30/shrink_cf.py \
@@ -47,42 +60,43 @@ jobs:
           ld -m elf_i386 -Ttext 0x100 --oformat binary -o output/MTEST.COM output/mtest.o
           test "$(stat -c%s output/MTEST.COM)" -le 8192
 
-      - name: Enable DOS CuteMouse at startup, preserve normal DOS prompt
+      - name: Enable DOS CuteMouse; select original Windows 1.04 COM1 driver
         run: |
           python3 tools/tandy30/build_mouse.py \
             output/TANDY30_CF_BASE.img \
             output/WIN30_MOUSE_ORIGINAL.DRV \
-            output/TANDY1000EX_WIN30_STOCK_MOUSE_CF_31808S.img \
+            output/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img \
             --dos-test output/MTEST.COM \
-            --cutemouse output/CTMOUSE.EXE
+            --cutemouse output/CTMOUSE.EXE \
+            --mouse-systems-driver output/WIN104_MSMOUSE1.DRV
 
       - name: Verify exact CF size, startup configuration and checksum
         run: |
-          test "$(stat -c%s output/TANDY1000EX_WIN30_STOCK_MOUSE_CF_31808S.img)" -eq 16285696
+          test "$(stat -c%s output/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img)" -eq 16285696
           cd output
-          sha256sum -c TANDY1000EX_WIN30_STOCK_MOUSE_CF_31808S.img.sha256
-          mcopy -i "TANDY1000EX_WIN30_STOCK_MOUSE_CF_31808S.img@@32256" ::/AUTOEXEC.BAT VERIFY_AUTOEXEC.BAT
-          mcopy -i "TANDY1000EX_WIN30_STOCK_MOUSE_CF_31808S.img@@32256" ::/WINDOWS/SYSTEM.INI VERIFY_SYSTEM.INI
-          mcopy -i "TANDY1000EX_WIN30_STOCK_MOUSE_CF_31808S.img@@32256" ::/WINDOWS/SYSTEM/MOUSE.DRV VERIFY_MOUSE.DRV
-          echo "8ca171370b9b51a1c642ec2a03363f1e30f675733078b91b8eaf34a8299fe476  VERIFY_MOUSE.DRV" | sha256sum -c -
+          sha256sum -c TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img.sha256
+          mcopy -i "TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img@@32256" ::/AUTOEXEC.BAT VERIFY_AUTOEXEC.BAT
+          mcopy -i "TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img@@32256" ::/WINDOWS/SYSTEM.INI VERIFY_SYSTEM.INI
+          mcopy -i "TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img@@32256" ::/WINDOWS/SYSTEM/MSMOUSE1.DRV VERIFY_MOUSE.DRV
+          echo "99b3578809422728d64ad4cdbe17361cdde400840167c8d90c7499842c2812b8  VERIFY_MOUSE.DRV" | sha256sum -c -
           python3 - <<'PY'
           from pathlib import Path
           a = Path('VERIFY_AUTOEXEC.BAT').read_bytes().upper()
           s = Path('VERIFY_SYSTEM.INI').read_bytes().upper()
           assert b'C:\\CTMOUSE.EXE /S14 /M' in a
           assert b'C:\\WINDOWS' in a
-          assert b'MOUSE.DRV=MOUSE.DRV' in s
+          assert b'MOUSE.DRV=MSMOUSE1.DRV' in s
           assert b'DISPLAY.DRV=TANDYDSP.' in s
           assert not any(line.strip().startswith((b'WIN', b'CALL WIN')) for line in a.splitlines())
           print('DOS CuteMouse autoload verified; Windows manual launch only; Tandy display preserved')
           PY
 
-      - name: Upload ONE stock-driver Windows 3.0 CF image
+      - name: Upload ONE Windows 1.04 mouse-driver experiment CF image
         uses: actions/upload-artifact@v4
         with:
-          name: TANDY1000EX_WIN30_STOCK_MOUSE_CF_31808S
+          name: TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S
           path: |
-            output/TANDY1000EX_WIN30_STOCK_MOUSE_CF_31808S.img
-            output/TANDY1000EX_WIN30_STOCK_MOUSE_CF_31808S.img.sha256
+            output/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img
+            output/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img.sha256
           if-no-files-found: error
           retention-days: 30
