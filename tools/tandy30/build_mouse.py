@@ -150,11 +150,11 @@ def main():
             m = re.match(r"(?i)^(\s*PATH\s*=\s*)(.*)$", auto_lines[index])
             if not m:
                 raise SystemExit("Unsupported AUTOEXEC.BAT PATH syntax")
-            dirs = [value.strip().rstrip("\\\\").upper()
+            dirs = [value.strip().rstrip("\\").upper()
                     for value in m.group(2).split(";") if value.strip()]
-            if "C:\\\\WINDOWS" not in dirs:
-                auto_lines[index] = auto_lines[index].rstrip(";") + ";C:\\\\WINDOWS"
-            startup_command = "C:\\\\CTMOUSE.EXE /S14 /M"
+            if "C:\\WINDOWS" not in dirs:
+                auto_lines[index] = auto_lines[index].rstrip(";") + ";C:\\WINDOWS"
+            startup_command = "C:\\CTMOUSE.EXE /S14 /M"
             if not any(line.strip().upper() == startup_command for line in auto_lines):
                 auto_lines.append(startup_command)
             new_autoexec = ("\r\n".join(auto_lines) + "\r\n").encode("cp437")
@@ -164,7 +164,7 @@ def main():
             read_dos(args.output, "::/AUTOEXEC.BAT", verify_auto)
             if verify_auto.read_bytes() != new_autoexec:
                 raise SystemExit("Failed to verify AUTOEXEC.BAT")
-            print("Installed CTMOUSE.EXE, disabled old MOUSE.SYS, enabled CTMOUSE /S14 /M at boot, added C:\\\\WINDOWS to PATH")
+            print("Installed CTMOUSE.EXE, disabled old MOUSE.SYS, enabled CTMOUSE /S14 /M at boot, added C:\\WINDOWS to PATH")
     digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
     args.output.with_name(args.output.name + ".sha256").write_text(
         f"{digest}  {args.output.name}\n", encoding="ascii"
