@@ -78,13 +78,6 @@ def main():
         # Windows 3.0 expects CRLF text, and the file may use DOS codepage characters.
         mouse_name = "msmouse1.drv" if args.mouse_systems_driver else "mouse.drv"
         updated = replace_ini(original.decode("cp437"), mouse_name)
-        if args.mouse_systems_driver:
-            # Windows Setup's mouse description is informational only.
-            updated = re.sub(
-                r"(?im)^([ \t]*mouse\.drv[ \t]*=).*Mouse.*$",
-                lambda m: m.group(1) + "Mouse Systems (or VisiOn) on COM1",
-                updated, count=1,
-            ) if "[boot.description]" in updated.lower() else updated
         updated = updated.replace("\r\n", "\n").replace("\n", "\r\n").encode("cp437")
         ini.write_bytes(updated)
         mcopy(args.output, args.mouse_driver, "::/WINDOWS/SYSTEM/MOUSE.DRV")
