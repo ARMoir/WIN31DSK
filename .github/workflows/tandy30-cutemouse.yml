@@ -1,13 +1,7 @@
-name: Tandy 1000 EX Windows 3.0 + CuteMouse (V20 test)
+name: Tandy 1000 EX DOS + Windows 3.0 mouse CF image
 
 on:
   workflow_dispatch:
-    inputs:
-      original_mouse_drv_url:
-        description: 'Optional HTTPS URL to the uncompressed original 4,896-byte Windows 3.0 MOUSE.DRV (SHA-256 verified)'
-        required: false
-        type: string
-        default: ''
   push:
     branches: [TANDY30]
     paths:
@@ -23,144 +17,61 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout TANDY30
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install DOS disk image build tools
+      - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y mtools libmspack-dev gcc binutils make git 7zip
+          sudo apt-get install -y mtools libmspack-dev gcc binutils make git
 
-      - name: Build pinned 8086-compatible CuteMouse
+      - name: Compile 8086-compatible CuteMouse for DOS
         run: bash tools/tandy30/build_cutemouse.sh output
 
-      - name: Build Microsoft KWAJ unpacker
+      - name: Expand checksum-pinned Microsoft Mouse 9.01 Windows driver
         run: |
-          mkdir -p output
           gcc -Wall -Wextra -Werror -O2 tools/tandy30/expand_kwaj.c -lmspack -o output/expand_kwaj
+          python3 tools/tandy30/prepare_msm901.py output/MOUSE.DRV
+          echo "ed2510f897a716926a4e9881352b77c8e0921ea9cca37ea820df03dcf3f493ec  output/MOUSE.DRV" | sha256sum -c -
 
-      - name: Expand Windows 3.0 Mouse 9.01 driver
-        run: python3 tools/tandy30/prepare_msm901.py output/MOUSE.DRV
-
-      - name: Restore Windows 3.0 Mouse Systems COM1 driver
-        run: |
-          base64 -d tools/tandy30/msmouse1_win30.drv.gz.b64 | gzip -d > output/MSMOUSE1.DRV
-          echo "91a0cf78237b1e3c3e257ea49c1b540eefa4b816e1a69734cf99de57305cb23b  output/MSMOUSE1.DRV" | sha256sum -c -
-
-      - name: Match physical CompactFlash capacity
+      - name: Resize baseline for physical 31808-sector CF
         run: |
           python3 tools/tandy30/shrink_cf.py \
             builds/TANDY1000EX_WIN30_NOGAMES_16MB.img \
-            output/TANDY1000EX_WIN30_CF_BASE.img
+            output/CF_BASE.img
 
-      - name: Assemble DOS mouse test utility for 8086
+      - name: Assemble DOS mouse tester
         run: |
           as --32 -o output/mtest.o tools/tandy30/mtest.s
           ld -m elf_i386 -Ttext 0x100 --oformat binary -o output/MTEST.COM output/mtest.o
-          test "$(stat -c%s output/MTEST.COM)" -le 8192
 
-      - name: Build 31808-sector CuteMouse test image
+      - name: Install DOS mouse startup and Windows PATH
         run: |
           python3 tools/tandy30/build_mouse.py \
-            output/TANDY1000EX_WIN30_CF_BASE.img \
+            output/CF_BASE.img \
             output/MOUSE.DRV \
-            output/TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img \
+            output/CF_STAGING.img \
             --dos-test output/MTEST.COM \
-            --cutemouse output/CTMOUSE.EXE \
-            --mouse-systems-driver output/MSMOUSE1.DRV
+            --cutemouse output/CTMOUSE.EXE
 
-      - name: Verify image size and checksum
-        run: |
-          test "$(stat -c%s output/TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img)" -eq 16285696
-          cd output
-          sha256sum -c TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img.sha256
-
-      - name: Create controlled Windows mouse startup A/B tests
-        run: |
-          python3 tools/tandy30/diagnostic_variants.py \
-            output/TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img output
-          cd output
-          sha256sum -c TANDY1000EX_WIN30_DOSMOUSE_WIN_NOMOUSE_CF_31808S.img.sha256
-          sha256sum -c TANDY1000EX_WIN30_MSSYS_NO_DOSMOUSE_CF_31808S.img.sha256
-
-      - name: Upload DOS mouse with original Windows no-mouse driver
-        uses: actions/upload-artifact@v4
-        with:
-          name: TANDY30_DOSMOUSE_WIN_NOMOUSE_BOOTTEST
-          path: |
-            output/TANDY1000EX_WIN30_DOSMOUSE_WIN_NOMOUSE_CF_31808S.img
-            output/TANDY1000EX_WIN30_DOSMOUSE_WIN_NOMOUSE_CF_31808S.img.sha256
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload Windows Mouse Systems driver without DOS mouse
-        uses: actions/upload-artifact@v4
-        with:
-          name: TANDY30_MSSYS_NO_DOSMOUSE_BOOTTEST
-          path: |
-            output/TANDY1000EX_WIN30_MSSYS_NO_DOSMOUSE_CF_31808S.img
-            output/TANDY1000EX_WIN30_MSSYS_NO_DOSMOUSE_CF_31808S.img.sha256
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Publish flashable image and standalone diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S
-          path: |
-            output/TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img
-            output/TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img.sha256
-            output/CTMOUSE.EXE
-            output/MTEST.COM
-            output/CTMOUSE_GPL.txt
-            output/CTMOUSE_SOURCES.txt
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Obtain checksum-pinned original Windows 3.0 mouse driver
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          DRIVER_URL: ${{ inputs.original_mouse_drv_url }}
-        run: |
-          if [ -n "$DRIVER_URL" ]; then
-            curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
-              "$DRIVER_URL" -o output/WIN30_MOUSE_ORIGINAL.DRV
-          else
-            # Windows 3.0 720K archive from the two official mirrors.
-            curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
-              "https://dl.winworldpc.com/Microsoft%20Windows%203.0%20(3.5%20720K).7z" \
-              -o output/WIN30_720K.7z || \
-            curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
-              "https://dl-alt1.winworldpc.com/Microsoft%20Windows%203.0%20(3.5%20720K).7z" \
-              -o output/WIN30_720K.7z
-            echo "b04d4a0021183c67081c833425ea8d5ba89c30c3228a0dc742bcf4225f90bb8e5576506ce4dac395820b18cdd0950c6c25497e8d986edb25df13bf10821e1bb0  output/WIN30_720K.7z" | sha512sum -c -
-            mkdir -p output/win30-install-media
-            7z x -y -ooutput/win30-install-media output/WIN30_720K.7z > /dev/null
-            DISK2="$(find output/win30-install-media -type f -iname 'DISK02.IMG' -print -quit)"
-            test -n "$DISK2"
-            mcopy -i "$DISK2" ::/MOUSE.DRV output/WIN30_MOUSE.SZDD
-            python3 tools/tandy30/int33-test/decompress_szdd.py output/WIN30_MOUSE.SZDD output/WIN30_MOUSE_ORIGINAL.DRV
-          fi
-          echo "8ca171370b9b51a1c642ec2a03363f1e30f675733078b91b8eaf34a8299fe476  output/WIN30_MOUSE_ORIGINAL.DRV" | sha256sum -c -
-
-      - name: Patch Windows mouse for proven CuteMouse DOS INT33 interface
-        if: github.event_name == 'workflow_dispatch'
+      - name: Enable Windows 3.0 real-mode mouse through DOS INT 33h
         run: |
           python3 tools/tandy30/int33-test/patch.py \
-            output/TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img \
-            output/WIN30_MOUSE_ORIGINAL.DRV \
-            output/TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img
-          test "$(stat -c%s output/TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img)" -eq 16285696
-          cd output
-          sha256sum -c TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img.sha256
+            output/CF_STAGING.img \
+            output/MOUSE.DRV \
+            output/TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S.img
 
-      - name: Publish separate Windows 3.0 INT33 patched mouse image
-        if: github.event_name == 'workflow_dispatch'
+      - name: Verify exact card size and checksum
+        run: |
+          test "$(stat -c%s output/TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S.img)" -eq 16285696
+          cd output
+          sha256sum -c TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S.img.sha256
+
+      - name: Publish ONE bootable CF image
         uses: actions/upload-artifact@v4
         with:
-          name: TANDY1000EX_WIN30_INT33_PATCH_CF_31808S
+          name: TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S
           path: |
-            output/TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img
-            output/TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img.sha256
+            output/TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S.img
+            output/TANDY1000EX_DOS_WIN30_MOUSE_CF_31808S.img.sha256
           if-no-files-found: error
           retention-days: 30
