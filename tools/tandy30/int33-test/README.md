@@ -46,3 +46,23 @@ GitHub CI success alone.
 autoloaded, not automatic launching of Windows. Windows is started
 manually with `WIN` from any directory (`C:\WINDOWS` is on DOS PATH).
 
+
+## Next controlled hardware test: stock Windows 3.0 driver
+
+The `TANDY30` workflow now publishes **one** output image,
+`TANDY1000EX_WIN30_STOCK_MOUSE_CF_31808S.img`, containing the
+**unmodified** original Windows 3.0 `MOUSE.DRV` (4,896 bytes; SHA-256
+`8ca171370b9b51a1c642ec2a03363f1e30f675733078b91b8eaf34a8299fe476`).
+This is deliberately **not** the earlier failed INT33 binary patch, and
+**not** the separate `MSMOUSE1.DRV` hardware driver. It retains DOS
+CuteMouse `/S14 /M`, a manual `WIN` command, and the original Tandy
+graphics driver.
+
+Rationale: Microsoft's stock Windows mouse driver may use DOS INT 33h
+when direct hardware probing does not find its supported mouse hardware.
+This is a hypothesis to verify on the Tandy, **not a working fix yet**.
+
+Test: Boot DOS → run `MTEST` → exit `MTEST` → type `WIN`.
+Report one of: Windows boots and mouse works, Windows boots without mouse,
+or Windows crashes/hangs. For any startup regression restore
+`mouse.drv=nomouse.drv` in `C:\WINDOWS\SYSTEM.INI` under `[boot]`.
