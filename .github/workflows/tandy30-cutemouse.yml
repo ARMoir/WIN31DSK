@@ -112,6 +112,7 @@ jobs:
           retention-days: 30
 
       - name: Download checksum-pinned Windows 3.0 installation media for INT33 driver
+        if: github.event_name == 'workflow_dispatch'
         run: |
           # Both official WinWorld mirrors serve the same checksum-pinned archive.
           curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
@@ -132,6 +133,7 @@ jobs:
           echo "8ca171370b9b51a1c642ec2a03363f1e30f675733078b91b8eaf34a8299fe476  output/WIN30_MOUSE_ORIGINAL.DRV" | sha256sum -c -
 
       - name: Patch Windows mouse for proven CuteMouse DOS INT33 interface
+        if: github.event_name == 'workflow_dispatch'
         run: |
           python3 tools/tandy30/int33-test/patch.py \
             output/TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img \
@@ -142,6 +144,7 @@ jobs:
           sha256sum -c TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img.sha256
 
       - name: Publish separate Windows 3.0 INT33 patched mouse image
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: TANDY1000EX_WIN30_INT33_PATCH_CF_31808S
