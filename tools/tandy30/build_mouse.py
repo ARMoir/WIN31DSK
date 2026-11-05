@@ -105,7 +105,7 @@ def main():
             read_dos(args.output, "::/CONFIG.SYS", config)
             current_config = config.read_bytes()
             lines = current_config.decode("cp437").splitlines(keepends=True)
-            pattern = re.compile(r"(?i)^\\s*DEVICE(?:HIGH)?\\s*=\\s*(?:[A-Z]:)?\\\\MOUSE\\\\MOUSE\\.SYS(?:\\s|$)")
+            pattern = re.compile(r"(?i)^\s*DEVICE(?:HIGH)?\s*=\s*(?:[A-Z]:)?\\MOUSE\\MOUSE\.SYS(?:\s|$)")
             hits = [i for i, line in enumerate(lines) if pattern.match(line)]
             if len(hits) != 1:
                 raise SystemExit(f"Expected one legacy MOUSE.SYS line in CONFIG.SYS, found {len(hits)}")
