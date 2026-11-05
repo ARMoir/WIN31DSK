@@ -21,7 +21,11 @@ jobs:
       - name: Install FAT image tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y mtools mscompress
+          sudo apt-get install -y mtools libmspack-dev gcc
+      - name: Build KWAJ extraction utility
+        run: |
+          mkdir -p output
+          gcc -Wall -Wextra -Werror -O2 tools/tandy30/expand_kwaj.c -lmspack -o output/expand_kwaj
       - name: Download and expand Microsoft Mouse 9.01 Windows driver
         run: python3 tools/tandy30/prepare_msm901.py output/MOUSE.DRV
       - name: Build mouse-enabled 16 MiB image
