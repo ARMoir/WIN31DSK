@@ -3,6 +3,7 @@
 import hashlib
 from pathlib import Path
 import subprocess
+import tempfile
 import sys
 from urllib.request import urlopen
 import zipfile
@@ -24,8 +25,12 @@ def main():
         packed = zf.read(MEMBER)
     if not packed.startswith(b"KWAJ"):
         raise SystemExit("MOUSE.DR$ is not the expected KWAJ format")
-    result = subprocess.run(["msexpand"], input=packed, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    driver = result.stdout
+    with tempfile.TemporaryDirectory() as tmp:
+        source = Path(tmp) / "MOUSE.DR$"
+        expanded = Path(tmp) / "MOUSE.DRV"
+        source.write_bytes(packed)
+        subprocess.run(["output/expand_kwaj", str(source), str(expanded)], check=True)
+        driver = expanded.read_bytes()
     if len(driver) < 1024 or not driver.startswith(b"MZ"):
         raise SystemExit(f"Expanded driver lacks MZ header (length {len(driver)})")
     output.write_bytes(driver)
