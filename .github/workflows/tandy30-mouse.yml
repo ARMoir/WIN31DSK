@@ -21,12 +21,14 @@ jobs:
       - name: Install FAT image tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y mtools
+          sudo apt-get install -y mtools mscompress
+      - name: Download and expand Microsoft Mouse 9.01 Windows driver
+        run: python3 tools/tandy30/prepare_msm901.py output/MOUSE.DRV
       - name: Build mouse-enabled 16 MiB image
         run: |
           python3 tools/tandy30/build_mouse.py \
             builds/TANDY1000EX_WIN30_NOGAMES_16MB.img \
-            drivers/tandy30/MOUSE.DRV \
+            output/MOUSE.DRV \
             output/TANDY1000EX_WIN30_MOUSE_16MB.img
       - name: Upload image and checksum
         uses: actions/upload-artifact@v4
