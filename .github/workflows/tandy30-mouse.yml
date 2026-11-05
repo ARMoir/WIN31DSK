@@ -1,0 +1,39 @@
+name: Tandy 1000 EX Windows 3.0 mouse image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-mouse.yml'
+      - 'tools/tandy30/**'
+      - 'drivers/tandy30/**'
+      - 'builds/TANDY1000EX_WIN30_NOGAMES_16MB.img'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FAT image tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mtools
+      - name: Build mouse-enabled 16 MiB image
+        run: |
+          python3 tools/tandy30/build_mouse.py \
+            builds/TANDY1000EX_WIN30_NOGAMES_16MB.img \
+            drivers/tandy30/MOUSE.DRV \
+            output/TANDY1000EX_WIN30_MOUSE_16MB.img
+      - name: Upload image and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY1000EX_WIN30_MOUSE_16MB
+          path: |
+            output/TANDY1000EX_WIN30_MOUSE_16MB.img
+            output/TANDY1000EX_WIN30_MOUSE_16MB.img.sha256
+          if-no-files-found: error
+          retention-days: 30
