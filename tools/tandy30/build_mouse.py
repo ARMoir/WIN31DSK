@@ -45,6 +45,7 @@ def main():
     parser.add_argument("baseline", type=Path)
     parser.add_argument("mouse_driver", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--dos-test", type=Path, help="8086-compatible MTEST.COM to install at C:\\MTEST.COM")
     args = parser.parse_args()
     if not args.mouse_driver.is_file():
         raise SystemExit(
@@ -85,6 +86,16 @@ def main():
         read_dos(args.output, "::/WINDOWS/SYSTEM/MOUSE.DRV", readback)
         if readback.read_bytes() != driver:
             raise SystemExit("Mouse driver did not round-trip correctly")
+        if args.dos_test:
+            tester = args.dos_test.read_bytes()
+            if not 128 <= len(tester) <= 65536 or tester.startswith(b"MZ"):
+                raise SystemExit("MTEST.COM must be a small DOS .COM binary")
+            mcopy(args.output, args.dos_test, "::/MTEST.COM")
+            test_copy = temp / "VERIFY.COM"
+            read_dos(args.output, "::/MTEST.COM", test_copy)
+            if test_copy.read_bytes() != tester:
+                raise SystemExit("DOS mouse test program did not round-trip correctly")
+            print(f"Installed DOS mouse tester C:\\MTEST.COM ({len(tester)} bytes)")
     digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
     args.output.with_name(args.output.name + ".sha256").write_text(
         f"{digest}  {args.output.name}\n", encoding="ascii"
