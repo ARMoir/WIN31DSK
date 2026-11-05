@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 
 PARTITION_OFFSET = 63 * 512
-IMAGE_SIZE = 16 * 1024 * 1024
+IMAGE_SIZE = 31808 * 512
 
 def run(*args):
     subprocess.run(args, check=True)
@@ -56,14 +56,14 @@ def main():
     if len(driver) < 1024 or driver[:2] != b"MZ":
         raise SystemExit("Provided mouse driver does not resemble a valid DOS/Windows executable driver (MZ header).")
     if args.baseline.stat().st_size != IMAGE_SIZE:
-        raise SystemExit("Baseline must be exactly 16 MiB (16777216 bytes).")
+        raise SystemExit("Input image must match CF card capacity: 31808 sectors (16285696 bytes).")
     with args.baseline.open("rb") as src:
         mbr = src.read(512)
         if mbr[510:512] != b"\x55\xaa":
             raise SystemExit("Invalid MBR signature")
         ptype = mbr[450]
         start, count = struct.unpack_from("<II", mbr, 454)
-        if ptype not in (0x01, 0x04, 0x06) or start != 63 or start + count > IMAGE_SIZE // 512:
+        if ptype not in (0x01, 0x04, 0x06) or start != 63 or start + count != IMAGE_SIZE // 512:
             raise SystemExit(f"Unexpected DOS partition layout: type={ptype:#x}, start={start}, sectors={count}")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(args.baseline, args.output)
