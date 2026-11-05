@@ -2,7 +2,9 @@
 
 The [TANDY30 GitHub Actions workflow](../../.github/workflows/tandy30-mouse.yml) builds a separate image sized exactly for a 31,808-sector (16,285,696-byte) CF card from the unchanged `builds/TANDY1000EX_WIN30_NOGAMES_16MB.img` baseline.
 
-First, `shrink_cf.py` safely shrinks the DOS partition and FAT16 boot parameters, after confirming the discarded clusters are unused. The unchanged 16 MiB baseline stays in GitHub.\n\nThe workflow downloads [Microsoft Mouse Software 9.01](https://archive.org/details/msm901) from Internet Archive, verifies the package's pinned SHA-256 checksum, expands `MSM901/MOUSE.DR$` to `MOUSE.DRV` using a small `libmspack` KWAJ extractor, and injects it into `C:\WINDOWS\SYSTEM\MOUSE.DRV`. It changes the `[boot]` mouse driver setting in `SYSTEM.INI` to `mouse.drv=mouse.drv`. No installation utilities, pointer manager or games are added.
+First, `shrink_cf.py` safely shrinks the DOS partition and FAT16 boot parameters, after confirming the discarded clusters are unused. The unchanged 16 MiB baseline stays in GitHub.
+
+The workflow downloads [Microsoft Mouse Software 9.01](https://archive.org/details/msm901) from Internet Archive, verifies the package's pinned SHA-256 checksum, expands `MSM901/MOUSE.DR$` to `MOUSE.DRV` using a small `libmspack` KWAJ extractor, and injects it into `C:\WINDOWS\SYSTEM\MOUSE.DRV`. It changes the `[boot]` mouse driver setting in `SYSTEM.INI` to `mouse.drv=mouse.drv`. No installation utilities, pointer manager or games are added.
 
 **To run:** Open GitHub Actions, select **Tandy 1000 EX Windows 3.0 mouse image**, choose `TANDY30`, click **Run workflow**. A successful build publishes `TANDY1000EX_WIN30_MOUSE_CF_31808S.img` and its SHA-256 file as a downloadable artifact.
 
@@ -21,3 +23,25 @@ At a DOS prompt, run `TYPE C:\\WINDOWS\\SYSTEM.INI` or use the DOS editor to che
 Next, verify the serial mouse physically responds in DOS, and whether the serial port is COM1 or COM2. If DOS does not recognize the mouse, the remaining problem may involve the serial port, wiring, interrupt, mouse protocol, or DOS mouse-driver selection, rather than the Windows driver. The build does not force COM1 because that mapping has not been verified on the Tandy expansion card.
 
 The target size is **31,808 sectors**, not the larger nominal 16 MiB (32,768 sectors). Avoid the Win32 Disk Imager oversize warning by using the updated image.
+
+## DOS mouse test: MTEST.COM
+
+The workflow now assembles `tools/tandy30/mtest.s` into a tiny **8086/V20-compatible** DOS program and places it at `C:\\MTEST.COM` in the generated mouse-enabled CF image. The standalone `MTEST.COM` is also attached to the Actions build artifact.
+
+**On the Tandy:** boot to a DOS prompt (do not start Windows), then type:
+
+```dos
+C:\\>MTEST
+```
+
+The program clears to an 80-column text display, reports the BIOS COM1/COM2 base addresses and whether the DOS INT 33h driver is responding, and shows mouse X, Y and button mask values in hex. Move the mouse and click both buttons. Press **Esc** or **Q** to exit. Button bits are **left=0001, right=0002, middle=0004**. The program does **not** install a mouse driver or speak to the serial port directly.
+
+**How to interpret results:**
+
+- **No DOS mouse driver** means INT 33h initialization failed. Check that `MOUSE.SYS` was actually loaded by CONFIG.SYS (or install the DOS mouse driver separately).
+- **Driver detected, but X/Y never change:** most likely the DOS driver can't see the physical mouse, or the wrong COM port/protocol, serial wiring, power, or IRQ is in use.
+- **X/Y change and buttons respond:** DOS is receiving mouse events. If Windows still has no pointer, focus on the Windows 3.0 `MOUSE.DRV` setting and driver compatibility.
+
+BIOS COM port values of `0000` mean no port is recorded at that BIOS-data-area entry, which is not conclusive proof that an expansion-port serial adapter is missing. Typical standard addresses are COM1=03F8 and COM2=02F8.
+
+No actual Tandy hardware test is performed by the workflow. The image remains sized to the card's exact 31,808 sectors.
