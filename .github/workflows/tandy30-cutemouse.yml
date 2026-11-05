@@ -1,0 +1,78 @@
+name: Tandy 1000 EX Windows 3.0 + CuteMouse (V20 test)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-cutemouse.yml'
+      - 'tools/tandy30/**'
+      - 'builds/TANDY1000EX_WIN30_NOGAMES_16MB.img'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout TANDY30
+        uses: actions/checkout@v4
+
+      - name: Install DOS disk image build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mtools libmspack-dev gcc binutils make git
+
+      - name: Build pinned 8086-compatible CuteMouse
+        run: bash tools/tandy30/build_cutemouse.sh output
+
+      - name: Build Microsoft KWAJ unpacker
+        run: |
+          mkdir -p output
+          gcc -Wall -Wextra -Werror -O2 tools/tandy30/expand_kwaj.c -lmspack -o output/expand_kwaj
+
+      - name: Expand Windows 3.0 Mouse 9.01 driver
+        run: python3 tools/tandy30/prepare_msm901.py output/MOUSE.DRV
+
+      - name: Match physical CompactFlash capacity
+        run: |
+          python3 tools/tandy30/shrink_cf.py \
+            builds/TANDY1000EX_WIN30_NOGAMES_16MB.img \
+            output/TANDY1000EX_WIN30_CF_BASE.img
+
+      - name: Assemble DOS mouse test utility for 8086
+        run: |
+          as --32 -o output/mtest.o tools/tandy30/mtest.s
+          ld -m elf_i386 -Ttext 0x100 --oformat binary -o output/MTEST.COM output/mtest.o
+          test "$(stat -c%s output/MTEST.COM)" -le 8192
+
+      - name: Build 31808-sector CuteMouse test image
+        run: |
+          python3 tools/tandy30/build_mouse.py \
+            output/TANDY1000EX_WIN30_CF_BASE.img \
+            output/MOUSE.DRV \
+            output/TANDY1000EX_WIN30_CTMOUSE_CF_31808S.img \
+            --dos-test output/MTEST.COM \
+            --cutemouse output/CTMOUSE.EXE
+
+      - name: Verify image size and checksum
+        run: |
+          test "$(stat -c%s output/TANDY1000EX_WIN30_CTMOUSE_CF_31808S.img)" -eq 16285696
+          cd output
+          sha256sum -c TANDY1000EX_WIN30_CTMOUSE_CF_31808S.img.sha256
+
+      - name: Publish flashable image and standalone diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY1000EX_WIN30_CTMOUSE_CF_31808S
+          path: |
+            output/TANDY1000EX_WIN30_CTMOUSE_CF_31808S.img
+            output/TANDY1000EX_WIN30_CTMOUSE_CF_31808S.img.sha256
+            output/CTMOUSE.EXE
+            output/MTEST.COM
+            output/CTMOUSE_GPL.txt
+            output/CTMOUSE_SOURCES.txt
+          if-no-files-found: error
+          retention-days: 30
