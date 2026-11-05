@@ -113,7 +113,13 @@ jobs:
 
       - name: Download checksum-pinned Windows 3.0 installation media for INT33 driver
         run: |
-          curl --fail --location --retry 3 --retry-delay 5 --connect-timeout 20 --max-time 180 \
+          # Both official WinWorld mirrors serve the same checksum-pinned archive.
+          curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
+            --referer "https://winworldpc.com/" \
+            "https://dl.winworldpc.com/Microsoft%20Windows%203.0%20(3.5%20720K).7z" \
+            -o output/WIN30_720K.7z || \
+          curl --fail --location --retry 2 --connect-timeout 20 --max-time 180 \
+            --referer "https://winworldpc.com/" \
             "https://dl-alt1.winworldpc.com/Microsoft%20Windows%203.0%20(3.5%20720K).7z" \
             -o output/WIN30_720K.7z
           echo "b04d4a0021183c67081c833425ea8d5ba89c30c3228a0dc742bcf4225f90bb8e5576506ce4dac395820b18cdd0950c6c25497e8d986edb25df13bf10821e1bb0  output/WIN30_720K.7z" | sha512sum -c -
