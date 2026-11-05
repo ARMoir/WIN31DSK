@@ -85,3 +85,24 @@ The Mouse Systems switch is a *detection* option. The mouse's physical MC/PC swi
 ### Rebuilding
 
 Actions → **Tandy 1000 EX Windows 3.0 + CuteMouse (V20 test)** → Run workflow (branch `TANDY30`). Download the artifact `TANDY1000EX_WIN30_CTMOUSE_CF_31808S`, extract it, and flash the `.img`. Keep the original CF card as a fallback.
+
+## DOS autoload, Windows on PATH, native COM1 driver (latest build)
+
+The revised CuteMouse workflow generates **`TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img`**. This variant keeps the same exact **31,808-sector** CF capacity and adds the Windows 3.0 **`MSMOUSE1.DRV`** driver from the user-provided Windows 3.0 installation media. The checked-in compressed driver data is validated against SHA-256 `91a0cf78237b1e3c3e257ea49c1b540eefa4b816e1a69734cf99de57305cb23b` during the workflow. It was extracted from `MSMOUSE1.DRV` (SZDD-expanded) in the source archive.
+
+The image's Windows `SYSTEM.INI` uses:
+```ini
+[boot]
+display.drv=TANDYDSP.DRV
+mouse.drv=msmouse1.drv
+```
+The existing `TANDYDSP.DRV` display setting is preserved, not overwritten. We retain `MOUSE.DRV` for reference but switch active Windows mouse support to the native Mouse Systems COM1 driver. This is a **hardware experiment**, not yet verified on the Tandy.
+
+The updated DOS `CONFIG.SYS` continues to disable the old Microsoft DOS mouse driver. The `AUTOEXEC.BAT` keeps its original entries and extends its PATH with `C:\\WINDOWS`, then runs:
+```bat
+C:\\CTMOUSE.EXE /S14 /M
+```
+
+After boot, the mouse should already be available to DOS programs. Run `MTEST` to confirm it, then type `WIN` at any DOS prompt to start Windows 3.0. **Windows is not started automatically.**
+
+Windows 3.0 uses a separate Windows mouse driver, so working DOS mouse motion does not guarantee a Windows pointer. If mouse movement fails in Windows, note whether clicks or movement are registered, and try the Windows 3.0 Setup mouse configuration next. Do not change the Tandy display driver until we establish that it is responsible.
