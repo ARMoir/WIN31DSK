@@ -23,7 +23,7 @@ jobs:
       - name: Install DOS disk image build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y mtools libmspack-dev gcc binutils make git
+          sudo apt-get install -y mtools libmspack-dev gcc binutils make git 7zip
 
       - name: Build pinned 8086-compatible CuteMouse
         run: bash tools/tandy30/build_cutemouse.sh output
@@ -108,5 +108,39 @@ jobs:
             output/MTEST.COM
             output/CTMOUSE_GPL.txt
             output/CTMOUSE_SOURCES.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Download checksum-pinned Windows 3.0 installation media for INT33 driver
+        run: |
+          curl --fail --location --retry 3 --retry-delay 5 --connect-timeout 20 --max-time 180 \
+            "https://dl-alt1.winworldpc.com/Microsoft%20Windows%203.0%20(3.5%20720K).7z" \
+            -o output/WIN30_720K.7z
+          echo "b04d4a0021183c67081c833425ea8d5ba89c30c3228a0dc742bcf4225f90bb8e5576506ce4dac395820b18cdd0950c6c25497e8d986edb25df13bf10821e1bb0  output/WIN30_720K.7z" | sha512sum -c -
+          mkdir -p output/win30-install-media
+          7z x -y -ooutput/win30-install-media output/WIN30_720K.7z > /dev/null
+          DISK2="$(find output/win30-install-media -type f -iname 'DISK02.IMG' -print -quit)"
+          test -n "$DISK2"
+          mcopy -i "$DISK2" ::/MOUSE.DRV output/WIN30_MOUSE.SZDD
+          python3 tools/tandy30/int33-test/decompress_szdd.py output/WIN30_MOUSE.SZDD output/WIN30_MOUSE_ORIGINAL.DRV
+          echo "8ca171370b9b51a1c642ec2a03363f1e30f675733078b91b8eaf34a8299fe476  output/WIN30_MOUSE_ORIGINAL.DRV" | sha256sum -c -
+
+      - name: Patch Windows mouse for proven CuteMouse DOS INT33 interface
+        run: |
+          python3 tools/tandy30/int33-test/patch.py \
+            output/TANDY1000EX_WIN30_CTMOUSE_MSSYS_CF_31808S.img \
+            output/WIN30_MOUSE_ORIGINAL.DRV \
+            output/TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img
+          test "$(stat -c%s output/TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img)" -eq 16285696
+          cd output
+          sha256sum -c TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img.sha256
+
+      - name: Publish separate Windows 3.0 INT33 patched mouse image
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY1000EX_WIN30_INT33_PATCH_CF_31808S
+          path: |
+            output/TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img
+            output/TANDY1000EX_WIN30_INT33_PATCH_CF_31808S.img.sha256
           if-no-files-found: error
           retention-days: 30
