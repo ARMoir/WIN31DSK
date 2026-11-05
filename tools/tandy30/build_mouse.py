@@ -21,7 +21,7 @@ def mcopy(image, source, dest):
 def read_dos(image, path, destination):
     run("mcopy", "-i", f"{image}@@{PARTITION_OFFSET}", path, str(destination))
 
-def replace_ini(text):
+def replace_ini(text, driver_name="mouse.drv"):
     pattern = re.compile(r"(?im)^(\s*mouse\.drv\s*=).*$")
     section = re.search(r"(?im)^\[boot\]\s*$", text)
     if not section:
@@ -33,9 +33,9 @@ def replace_ini(text):
     end = boundaries[idx + 1].start() if idx + 1 < len(boundaries) else len(text)
     boot = text[section.end():end]
     if pattern.search(boot):
-        boot = pattern.sub(r"\g<1>mouse.drv", boot, count=1)
+        boot = pattern.sub(lambda match: match.group(1) + driver_name, boot, count=1)
     else:
-        boot = "\r\nmouse.drv=mouse.drv" + boot
+        boot = "\r\nmouse.drv=" + driver_name + boot
     updated = text[:section.end()] + boot + text[end:]
     # Preserve separate display-driver and hardware settings.
     return updated
@@ -46,7 +46,8 @@ def main():
     parser.add_argument("mouse_driver", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--dos-test", type=Path, help="8086-compatible MTEST.COM to install at C:\\MTEST.COM")
-    parser.add_argument("--cutemouse", type=Path, help="8086-compatible CTMOUSE.EXE; disable legacy MOUSE.SYS startup line")
+    parser.add_argument("--cutemouse", type=Path, help="8086-compatible CTMOUSE.EXE; configure COM1/IRQ4 Mouse Systems startup")
+    parser.add_argument("--mouse-systems-driver", type=Path, help="Windows 3.0 Mouse Systems COM1 MSMOUSE1.DRV")
     args = parser.parse_args()
     if not args.mouse_driver.is_file():
         raise SystemExit(
@@ -75,18 +76,37 @@ def main():
         read_dos(args.output, "::/WINDOWS/SYSTEM.INI", ini)
         original = ini.read_bytes()
         # Windows 3.0 expects CRLF text, and the file may use DOS codepage characters.
-        updated = replace_ini(original.decode("cp437")).replace("\r\n", "\n").replace("\n", "\r\n").encode("cp437")
+        mouse_name = "msmouse1.drv" if args.mouse_systems_driver else "mouse.drv"
+        updated = replace_ini(original.decode("cp437"), mouse_name)
+        if args.mouse_systems_driver:
+            # Windows Setup's mouse description is informational only.
+            updated = re.sub(
+                r"(?im)^(\\s*mouse\\.drv\\s*=).*Mouse.*$",
+                lambda m: m.group(1) + "Mouse Systems (or VisiOn) on COM1",
+                updated, count=1,
+            ) if "[boot.description]" in updated.lower() else updated
+        updated = updated.replace("\r\n", "\n").replace("\n", "\r\n").encode("cp437")
         ini.write_bytes(updated)
         mcopy(args.output, args.mouse_driver, "::/WINDOWS/SYSTEM/MOUSE.DRV")
         mcopy(args.output, ini, "::/WINDOWS/SYSTEM.INI")
         check = temp / "CHECK.INI"
         read_dos(args.output, "::/WINDOWS/SYSTEM.INI", check)
-        if not re.search(rb"(?im)^mouse\.drv\s*=\s*mouse\.drv\s*$", check.read_bytes()):
+        if not re.search(rb"(?im)^mouse\\.drv\\s*=\\s*" + re.escape(mouse_name.encode("ascii")) + rb"\\s*$", check.read_bytes()):
             raise SystemExit("Failed to verify Windows mouse driver activation")
         readback = temp / "VERIFY.DRV"
         read_dos(args.output, "::/WINDOWS/SYSTEM/MOUSE.DRV", readback)
         if readback.read_bytes() != driver:
             raise SystemExit("Mouse driver did not round-trip correctly")
+        if args.mouse_systems_driver:
+            native_driver = args.mouse_systems_driver.read_bytes()
+            if not 1024 <= len(native_driver) <= 65536 or native_driver[:2] != b"MZ":
+                raise SystemExit("MSMOUSE1.DRV must be a genuine Windows 3.0 DOS MZ-format driver")
+            mcopy(args.output, args.mouse_systems_driver, "::/WINDOWS/SYSTEM/MSMOUSE1.DRV")
+            native_verify = temp / "VERIFY_MSMOUSE1.DRV"
+            read_dos(args.output, "::/WINDOWS/SYSTEM/MSMOUSE1.DRV", native_verify)
+            if native_verify.read_bytes() != native_driver:
+                raise SystemExit("Windows 3.0 Mouse Systems COM1 driver did not round-trip correctly")
+            print(f"Installed Windows Mouse Systems COM1 driver ({len(native_driver)} bytes)")
         if args.dos_test:
             tester = args.dos_test.read_bytes()
             if not 128 <= len(tester) <= 65536 or tester.startswith(b"MZ"):
@@ -124,7 +144,34 @@ def main():
                 pattern.match(line) for line in new_config.decode("cp437").splitlines()
             ):
                 raise SystemExit("Failed to disable old Microsoft DOS MOUSE.SYS")
-            print("Installed CTMOUSE.EXE, disabled legacy CONFIG.SYS mouse entry; not automatically loaded")
+            # Preserve the original DOS tools and path, adding Windows and
+            # automatically loading the mouse only after DOS has booted.
+            autoexec = temp / "AUTOEXEC.BAT"
+            read_dos(args.output, "::/AUTOEXEC.BAT", autoexec)
+            auto_lines = autoexec.read_bytes().decode("cp437").splitlines()
+            path_lines = [i for i, line in enumerate(auto_lines)
+                          if re.match(r"(?i)^\\s*PATH\\s*(?:=|\\s+)", line)]
+            if len(path_lines) != 1:
+                raise SystemExit(f"Expected exactly one PATH line in AUTOEXEC.BAT; got {len(path_lines)}")
+            index = path_lines[0]
+            m = re.match(r"(?i)^(\\s*PATH\\s*=\\s*)(.*)$", auto_lines[index])
+            if not m:
+                raise SystemExit("Unsupported AUTOEXEC.BAT PATH syntax")
+            dirs = [value.strip().rstrip("\\\\").upper()
+                    for value in m.group(2).split(";") if value.strip()]
+            if "C:\\\\WINDOWS" not in dirs:
+                auto_lines[index] = auto_lines[index].rstrip(";") + ";C:\\\\WINDOWS"
+            startup_command = "C:\\\\CTMOUSE.EXE /S14 /M"
+            if not any(line.strip().upper() == startup_command for line in auto_lines):
+                auto_lines.append(startup_command)
+            new_autoexec = ("\\r\\n".join(auto_lines) + "\\r\\n").encode("cp437")
+            autoexec.write_bytes(new_autoexec)
+            mcopy(args.output, autoexec, "::/AUTOEXEC.BAT")
+            verify_auto = temp / "AUTO.VER"
+            read_dos(args.output, "::/AUTOEXEC.BAT", verify_auto)
+            if verify_auto.read_bytes() != new_autoexec:
+                raise SystemExit("Failed to verify AUTOEXEC.BAT")
+            print("Installed CTMOUSE.EXE, disabled old MOUSE.SYS, enabled CTMOUSE /S14 /M at boot, added C:\\\\WINDOWS to PATH")
     digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
     args.output.with_name(args.output.name + ".sha256").write_text(
         f"{digest}  {args.output.name}\n", encoding="ascii"
