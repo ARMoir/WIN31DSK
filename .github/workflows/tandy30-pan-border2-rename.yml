@@ -1,0 +1,39 @@
+name: Rename verified Tandy pan border-2 release asset
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-pan-border2-rename.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rename-verified-release-assets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Verify original released CF image, publish clearly named identical bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-pan-border2-progman-2026-11-06
+          OLD: TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img
+          NEW: TANDY1000EX_WIN30_PAN_16COLOR_BORDER2_PROGMAN_VISIBLE_CF.img
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$OLD" --dir .
+          echo "d8d0a38c3bab6f5df1b1f94c90efbb9b34beb2e35b5b4c6e25e53a3ff9102328  $OLD" | sha256sum -c -
+          cp "$OLD" "$NEW"
+          sha256sum "$NEW" > "$NEW.sha256"
+          gh release upload "$TAG" "$NEW" "$NEW.sha256" --repo "$GITHUB_REPOSITORY"
+          # Confirm the immutable contents are unchanged before retiring the old confusing names.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$NEW" --dir verify
+          echo "d8d0a38c3bab6f5df1b1f94c90efbb9b34beb2e35b5b4c6e25e53a3ff9102328  verify/$NEW" | sha256sum -c -
+          gh release delete-asset "$TAG" "$OLD" --yes --repo "$GITHUB_REPOSITORY"
+          gh release delete-asset "$TAG" "$OLD.sha256" --yes --repo "$GITHUB_REPOSITORY"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "Tandy 1000 EX Windows 3.0 | 16-color panning, border 2, Program Manager first"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | [.name,.size,.digest] | @tsv'
