@@ -29,12 +29,13 @@ static char symbols[NBTN]={
  '1','2','3','-',
  '0','.','=','+'
 };
+static char *finddot(char *s){while(*s){if(*s=='.')return s;s++;}return NULL;}
 static unsigned long mag(long x){return x<0?(unsigned long)(-x):(unsigned long)x;}
 static void format(long val,char *dst){
  unsigned long v=mag(val),whole=v/1000L,frac=v%1000L;
  char base[20];int i=0,n;
  if(val<0)dst[i++]='-';
- wsprintf(base,"%lu",whole);
+ wsprintf(base,"%ld",(long)whole);
  lstrcpy(dst+i,base);i=lstrlen(dst);
  if(frac){
   dst[i++]='.';
@@ -84,10 +85,10 @@ static void digit(char ch){
  begin_entry();
  len=lstrlen(input);
  if(ch=='.'){
-  if(lstrchr(input,'.')==NULL && len<15){input[len]='.';input[len+1]=0;}
+  if(finddot(input)==NULL && len<15){input[len]='.';input[len+1]=0;}
  }else{
-  if(lstrchr(input,'.')!=NULL){
-   char *p=lstrchr(input,'.');if(lstrlen(p)>=4)return;
+  if(finddot(input)!=NULL){
+   char *p=finddot(input);if(lstrlen(p)>=4)return;
   }
   if((input[0]=='0'&&input[1]==0) || (input[0]=='-'&&input[1]=='0'&&input[2]==0)){
    len=(input[0]=='-')?1:0;input[len]=ch;input[len+1]=0;
