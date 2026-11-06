@@ -16,6 +16,7 @@ def sha(data):
 
 def read(image, name, staging):
     local=staging/name.split("/")[-1]
+    if local.exists():local.unlink()
     subprocess.run(["mcopy","-i",str(image)+"@@32256","::/"+name,str(local)],check=True)
     return local.read_bytes()
 
