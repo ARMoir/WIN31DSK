@@ -1,0 +1,160 @@
+name: Tandy EX RRECT high-speed 16-color CF image
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-rrect-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FAT16 tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Fetch known-working TRIAL7 CF baseline and checksum-pinned candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p input staging output
+          gh release download tandy1000ex-win30-trial7-16color-performance-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img \
+            --dir input
+          echo '73129da6ca249120ee7bb1902b6da6b31eca40753dabe2fcc2a8220372574774  input/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img' | sha256sum -c -
+          gh run download 42278833076 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name tandy-rrect-16color-driver \
+            --dir staging
+          echo '79719cc78809453fec49bf596eeedcfffc7f96e67cc1b66222e1ab3ac6bb2c19  staging/RRECT.DRV' | sha256sum -c -
+          test "$(stat -c%s staging/RRECT.DRV)" -eq 54992
+          cp staging/RRECT.DRV staging/RR8.DRV
+          cp input/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img
+
+      - name: Pre-stage exact TRIAL7 Windows configuration and reversible RRECT selection
+        run: |
+          set -euo pipefail
+          IMG='output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img@@32256'
+          mcopy -i "$IMG" ::/WINDOWS/SYSTEM.INI staging/SYSTEM_OLD.INI
+          mcopy -i "$IMG" ::/TANDY88/SYS7.INI staging/SYS7_SAVED.INI
+          cmp staging/SYSTEM_OLD.INI staging/SYS7_SAVED.INI
+          python3 - <<'PY'
+          from pathlib import Path
+          ini = Path('staging/SYSTEM_OLD.INI').read_bytes()
+          assert ini.count(b'display.drv=TR73216.DRV') == 1
+          assert b'mouse.drv=msmouse1.drv' in ini.lower()
+          assert b'fonts.fon=EGASYS.FON' in ini
+          updated = ini.replace(b'display.drv=TR73216.DRV', b'display.drv=RR8.DRV')
+          assert updated.count(b'display.drv=RR8.DRV') == 1
+          Path('staging/SYSRR.INI').write_bytes(updated)
+          for f, lines in {
+            'USER8.BAT': ('@ECHO OFF', 'REM Select RRECT optimized display, only from DOS after Windows closes.',
+                          'COPY C:\\TANDY88\\SYSRR.INI C:\\WINDOWS\\SYSTEM.INI',
+                          'ECHO RRECT 16-color display selected. Type WIN to start Windows.'),
+            'REST7.BAT': ('@ECHO OFF', 'REM Restore physical-hardware-tested TRIAL7, only from DOS.',
+                          'COPY C:\\TANDY88\\SYS7.INI C:\\WINDOWS\\SYSTEM.INI',
+                          'ECHO TRIAL7 selected. Type WIN to start Windows.')
+          }.items():
+            Path('staging/'+f).write_bytes(('\r\n'.join(lines)+'\r\n').encode('ascii'))
+          PY
+          mcopy -o -i "$IMG" staging/RR8.DRV ::/WINDOWS/SYSTEM/RR8.DRV
+          mcopy -o -i "$IMG" staging/SYSRR.INI ::/TANDY88/SYSRR.INI
+          mcopy -o -i "$IMG" staging/SYSRR.INI ::/WINDOWS/SYSTEM.INI
+          mcopy -o -i "$IMG" staging/USER8.BAT ::/USER8.BAT
+          mcopy -o -i "$IMG" staging/REST7.BAT ::/REST7.BAT
+
+      - name: Verify FAT16 copies, all old files, new config, boot guard and driver hashes
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys, hashlib, struct
+          sys.path.insert(0, 'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          a=Fat16(bytearray(Path('input/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img').read_bytes()))
+          b=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img').read_bytes()))
+          assert a.b[:32256] == b.b[:32256], 'MBR/partition table changed'
+          sec=struct.unpack_from('<H',b.b,b.part+11)[0]
+          fatsz=struct.unpack_from('<H',b.b,b.part+22)[0]*sec
+          assert b.b[b.fat:b.fat+fatsz] == b.b[b.fat+fatsz:b.fat+2*fatsz], 'FAT mirrors differ'
+          def paths(fs):
+            found={}
+            def walk(folder='', cluster=None):
+              for _, name, flags, first, size in fs.entries(cluster):
+                if name in ('.','..'): continue
+                p=folder+'/'+name
+                if flags & 16: walk(p,first)
+                else: found[p]=hashlib.sha256(fs.read(p)).hexdigest()
+            walk()
+            return found
+          old=paths(a); new=paths(b)
+          assert set(old) - set(new) == set(), 'Missing original file(s)'
+          changed={k for k in old if old[k]!=new[k]}
+          assert changed == {'/WINDOWS/SYSTEM.INI'}, changed
+          additions=set(new)-set(old)
+          expected={'/WINDOWS/SYSTEM/RR8.DRV','/TANDY88/SYSRR.INI','/USER8.BAT','/REST7.BAT'}
+          assert additions==expected, (additions,expected)
+          for f in ['/WIN.BAT','/AUTOEXEC.BAT','/CONFIG.SYS','/CTMOUSE.EXE',
+                    '/WINDOWS/SYSTEM/MSMOUSE1.DRV','/WINDOWS/SYSTEM/TR73216.DRV',
+                    '/WINDOWS/SYSTEM/TR53216.DRV','/WINDOWS/SYSTEM/TANDY88.DRV',
+                    '/WINDOWS/SYSTEM/EGASYS.FON','/WINDOWS/SYSTEM/EGAFIX.FON',
+                    '/WINDOWS/SYSTEM/EGAOEM.FON','/TANDY88/SYS7.INI',
+                    '/TANDY88/SYS5.INI','/TANDY88/SYS05.INI']:
+            assert a.read(f)==b.read(f),f
+          assert b.read('/WINDOWS/SYSTEM/RR8.DRV')==Path('staging/RR8.DRV').read_bytes()
+          assert hashlib.sha256(b.read('/WINDOWS/SYSTEM/RR8.DRV')).hexdigest()=='79719cc78809453fec49bf596eeedcfffc7f96e67cc1b66222e1ab3ac6bb2c19'
+          assert b.read('/WINDOWS/SYSTEM.INI') == b.read('/TANDY88/SYSRR.INI')
+          assert b.read('/TANDY88/SYS7.INI') == a.read('/WINDOWS/SYSTEM.INI')
+          assert b'display.drv=RR8.DRV' in b.read('/WINDOWS/SYSTEM.INI')
+          assert b'mouse.drv=msmouse1.drv' in b.read('/WINDOWS/SYSTEM.INI').lower()
+          assert b'RESERVE.COM' in b.read('/WIN.BAT').upper()
+          assert b'TGA3.COM' in b.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in b.read('/WIN.BAT').upper()
+          assert b'COPY C:\\TANDY88\\SYS7.INI C:\\WINDOWS\\SYSTEM.INI' in b.read('/REST7.BAT').upper()
+          assert b'COPY C:\\TANDY88\\SYSRR.INI C:\\WINDOWS\\SYSTEM.INI' in b.read('/USER8.BAT').upper()
+          assert len(b.b)==31808*512, 'Incorrect CF size'
+          print('PASS: exact card geometry, mirrored FATs, all original file contents, mouse, fonts, guarded boot and four reversible driver selections')
+          print('Verified',len(old),'existing files;',len(additions),'new files; one SYSTEM.INI selection modified')
+          PY
+          (cd output && sha256sum TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img > TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img.sha256)
+
+      - name: Upload the complete bootable RRECT CF image to Actions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST
+          path: |
+            output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img
+            output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish a new GitHub prerelease, never overwrite TRIAL7
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-rrect-16color-test-2026-11-06
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'RRECT prerelease already exists, refusing overwrite'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img \
+            output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'EXPERIMENTAL: Tandy 1000 EX RRECT faster-redraw 16-color Windows 3.0 CF image' \
+            --notes-file tools/tandy30/RRECT_HARDWARE_TEST.md \
+            --prerelease \
+            --latest=false
