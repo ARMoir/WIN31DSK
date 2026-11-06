@@ -66,7 +66,7 @@ def main():
         raise ValueError('Unexpected original DOSMAX configuration')
     if b'SHELL=C:\\COMMAND.COM' not in PLAIN:
         raise ValueError('Plain COMMAND.COM configuration lost')
-    if not image.read('/COMMAND.COM').startswith(b'\xE9') and len(image.read('/COMMAND.COM')) < 40000:
+    if len(image.read('/COMMAND.COM')) < 40000:
         raise ValueError('Missing normal root DOS COMMAND.COM')
     mouse = image.read('/WINDOWS/SYSTEM/MSMOUSE1.DRV')
     if d(mouse) != '99b3578809422728d64ad4cdbe17361cdde400840167c8d90c7499842c2812b8':
