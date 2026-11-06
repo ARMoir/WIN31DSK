@@ -76,28 +76,28 @@ jobs:
           from pathlib import Path
           root=Path('staging')
           launcher='''@ECHO OFF
-REM Manual Windows 3.0 start, never automatically from DOS startup.
-REM Restore text mode 3 BEFORE reserving Tandy shared video memory.
-C:\\WINXT\\TGA3.COM
-IF ERRORLEVEL 1 GOTO FAILED
-C:\\WINXT\\RESERVE.COM
-IF ERRORLEVEL 1 GOTO FAILED
-C:\\WINDOWS\\WIN.COM /R
-GOTO END
-:FAILED
-ECHO Video reservation failed. Windows was NOT started.
-:END
-'''
+          REM Manual Windows 3.0 start, never automatically from DOS startup.
+          REM Restore text mode 3 BEFORE reserving Tandy shared video memory.
+          C:\\WINXT\\TGA3.COM
+          IF ERRORLEVEL 1 GOTO FAILED
+          C:\\WINXT\\RESERVE.COM
+          IF ERRORLEVEL 1 GOTO FAILED
+          C:\\WINDOWS\\WIN.COM /R
+          GOTO END
+          :FAILED
+          ECHO Video reservation failed. Windows was NOT started.
+          :END
+          '''
           root.joinpath('WIN.BAT').write_bytes(launcher.replace('\n','\r\n').encode('cp437'))
           setup='''@ECHO OFF
-ECHO Windows 3.0 OEM display Setup (separate experiment).
-ECHO Choose Display then Other and type C:\\WINXT
-ECHO Choose: Tandy EX/HX 320x200 16 colors.
-ECHO Keep your current mouse driver. Do not alter DOS startup.
-ECHO If prompted, select No Changes to CONFIG.SYS/AUTOEXEC.BAT.
-PAUSE
-C:\\WINDOWS\\SETUP.EXE
-'''
+          ECHO Windows 3.0 OEM display Setup (separate experiment).
+          ECHO Choose Display then Other and type C:\\WINXT
+          ECHO Choose: Tandy EX/HX 320x200 16 colors.
+          ECHO Keep your current mouse driver. Do not alter DOS startup.
+          ECHO If prompted, select No Changes to CONFIG.SYS/AUTOEXEC.BAT.
+          PAUSE
+          C:\\WINDOWS\\SETUP.EXE
+          '''
           root.joinpath('SETUP16.BAT').write_bytes(setup.replace('\n','\r\n').encode('cp437'))
           PY
           mcopy -o -i "$IMG" staging/WIN.BAT ::/WIN.BAT
