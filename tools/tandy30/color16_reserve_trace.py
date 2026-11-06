@@ -84,7 +84,7 @@ def trace_driver(original):
         assert new_jump == jmp_from(address, stub_addr)
         stub = bytes(binary[stub_addr-0x100:stub_addr-0x100+6])
         assert stub == b"\xBA" + struct.pack("<H", messages[idx][0]) + jmp_from(stub_addr+3, ORIGINAL_FAIL)
-        assert binary[messages[idx][0]-0x100:messages[idx][0]-0x100+len(messages[idx][1])] == messages[idx][1]
+        assert binary[messages[idx][0]-0x100:messages[idx][0]-0x100+len(messages[idx][1])+2] == messages[idx][1][:-1] + b"\r\n$"
     return bytes(binary)
 
 def main():
