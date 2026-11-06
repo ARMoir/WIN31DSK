@@ -1,6 +1,14 @@
 # Tandy 1000 EX: separate 16-color candidate05 experiment
 
-**Status:** Real-hardware test required; NOT a verified functioning 16-color desktop.
+**Status:** GitHub Actions build passed; real-hardware test required. NOT a verified functioning 16-color desktop.
+
+**[Download the separate candidate05 CF test image](https://github.com/ARMoir/WIN31DSK/releases/download/tandy1000ex-win30-candidate05-16color-test-2026-11-06/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img)** · [Release](https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-candidate05-16color-test-2026-11-06) · [Successful GitHub Actions run #42259337542](https://github.com/ARMoir/WIN31DSK/actions/runs/42259337542)
+
+- Image size: **16,285,696 bytes (31,808 sectors)**.
+- Image SHA-256: `21a434e9e39073a4cbb40dab05114d447290fa7c220085af2253b6ebc671c4a7`.
+- CI validated all driver/support file checksums and FAT16 readbacks, preserved original Windows display and mouse settings, and confirmed DOS does **not** start Windows automatically.
+- The image stages the driver in `C:\TANDY88`; **the user must install it via Windows Setup** before testing candidate05.
+
 
 ## Why a different driver
 
