@@ -1,5 +1,47 @@
 # Tandy 1000 EX, Windows 3.0, 320x200 16 colors: OEM Setup control test
 
+## Real-hardware A/B result: original four-color Windows boots (November 6, 2026)
+
+**CONFIRMED ON THE PHYSICAL TANDY:** The owner restored
+`C:\WINXT\SYSOLD.INI` over `C:\WINDOWS\SYSTEM.INI`, then manually launched
+Windows from `C:\>`. **Windows booted successfully** with the original
+`TANDYDSP.DRV` display in the *same* experimental plain-DOS CF environment.
+The Windows XT display settings installed by Setup remain backed up as
+`C:\WINXT\XTTEST.INI` and were not deleted.
+
+The same machine and DOS image with Windows XT 320x200 16-color OEM settings
+displayed startup artwork and then exited to DOS. This controlled comparison
+significantly narrows the failure to **the OEM video driver and/or SYSTEM.INI
+changes and associated display resources made during its installation**.
+It does not isolate the display binary itself. The system's DOS boot,
+CuteMouse, guarded WIN launcher and memory helper need no further speculative
+changes based on this test.
+
+**DO NOT overwrite the current working `SYSTEM.INI`** or reinstall
+Windows to continue investigation. The hardware-verified 4-color mouse
+Release remains untouched.
+
+### Next diagnostic (same CF card, no reflash, no Windows changes)
+
+At DOS, compare the working and experimental Windows configurations:
+
+```dos
+FC /L C:\WINXT\SYSOLD.INI C:\WINXT\XTTEST.INI
+```
+
+Photograph the output, especially `[boot]`, `display.drv`,
+`mouse.drv`, `fixedfon.fon`, `oemfonts.fon`, `fonts.fon`, and
+`286grabber` entries. The aim is to distinguish display settings from
+mouse or other unexpected changes **before** making another test.
+If `FC` is unavailable on this DOS image, save the two files and upload
+them for comparison instead.
+
+This test only reads files. Retain `SYSOLD.INI`, `XTTEST.INI`, and the
+working installed `SYSTEM.INI`; Windows remains manually launched.
+
+---
+
+
 ## Physical hardware result: OEM installation did NOT fix Windows startup
 
 On the actual Tandy 1000 EX, Windows 3.0 Setup successfully displayed the
