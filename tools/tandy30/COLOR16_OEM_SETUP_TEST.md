@@ -1,5 +1,59 @@
 # Tandy 1000 EX, Windows 3.0, 320x200 16 colors: OEM Setup control test
 
+## Physical hardware result: XT fonts crash with the working Tandy display
+
+**November 6, 2026, owner-confirmed:** Starting from the known-working
+`SYSOLD.INI` with the original `TANDYDSP.DRV`, changing only the
+three Windows `[boot]` font settings to
+`fixedfon.fon=XTEFIX.FON`, `oemfonts.fon=XTEOEM.FON`,
+and `fonts.fon=XTESYS.FON` made Windows crash. The original
+font settings plus `TANDYDSP.DRV` boot successfully.
+
+**The mechanism is not proven yet:** The fonts might be missing
+from the required `C:\WINDOWS\SYSTEM` directory on the actual
+CF card, they might be incompatible with this Windows build, or
+they might fail when mixed with the original display driver.
+The original 16-color image build installed and checked copies in
+`C:\WINDOWS\SYSTEM`; the later OEM test staged them under
+`C:\WINXT` for Windows Setup to install. CI does not prove the
+files' current location after actual DOS Setup modifications.
+
+### File presence check, on actual CF
+
+```dos
+DIR C:\WINDOWS\SYSTEM\XTE*.FON
+DIR C:\WINXT\XTE*.FON
+DIR C:\WINDOWS\SYSTEM\TR53216.DRV
+```
+
+Expected XT fonts: `XTEFIX.FON`, `XTEOEM.FON`,
+`XTESYS.FON`. Absence of a file from
+`C:\WINDOWS\SYSTEM` could cause startup failure independent
+of the driver itself.
+
+### Next isolated test: XT driver + ORIGINAL working Windows fonts
+
+From DOS, start with the exact original working INI:
+
+```dos
+COPY C:\WINXT\SYSOLD.INI C:\WINDOWS\SYSTEM.INI
+EDIT C:\WINDOWS\SYSTEM.INI
+```
+
+Within `[boot]`, change **only** `display.drv=TANDYDSP.DRV`
+to `display.drv=TR53216.DRV`; keep the original
+`fixedfon.fon`, `oemfonts.fon`, `fonts.fon`, mouse
+`mouse.drv=msmouse1.drv`, and every other value.
+Save and launch the existing guarded `WIN` manually from `C:\>`.
+
+This tests whether the XT 16-color driver can start with stock fonts.
+A crash still would not establish a driver defect because matching
+XT fonts may be needed. Restore `SYSOLD.INI` to recover. Do not
+change the confirmed known-good GitHub release.
+
+---
+
+
 ## Physical A/B result: original graphics driver ALSO crashes with XT settings
 
 **CONFIRMED ON PHYSICAL TANDY, November 6, 2026:** The owner restored
