@@ -1,0 +1,58 @@
+name: Publish Tandy 320x200 16-color experimental CF image as Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-color16-release.yml'
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-experimental-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Retrieve exact successful 16-color build artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release
+          gh run download 42141079656 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S \
+            --dir release
+
+      - name: Verify 31,808-sector CF image and its checksum
+        run: |
+          cd release
+          test "$(stat -c%s TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img)" -eq 16285696
+          echo 'd1cff2224f1b43b0be87b49e86905591268a564b4d55c42a6881899b93698453  TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img' | sha256sum -c -
+          sha256sum -c TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img.sha256
+
+      - name: Publish separate, clearly experimental 16-color GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-16color-experimental-2026-11-05
+          SOURCE_SHA: 930128de9f2e26af55cbc9bfb58b90a38d85bb16
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Experimental release already exists; refusing to overwrite.'
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            release/TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img \
+            release/TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --title "EXPERIMENTAL: Tandy 1000 EX Windows 3.0 320x200 16-color display" \
+            --notes-file tools/tandy30/COLOR16_TEST.md \
+            --prerelease \
+            --latest=false
+          echo "Experimental release published: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
