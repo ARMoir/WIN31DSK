@@ -1,0 +1,201 @@
+name: Tandy EX HPXY XR155 faster drawing experiment
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-hpxy-xr155.yml'
+      - 'tools/tandy30/hpxy_speed/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install DOSBox-X and FAT16 file utilities
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dosbox-x mtools
+
+      - name: Fetch pinned HPXY/XR155 upstream source and verified legacy toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init upstream
+          git -C upstream remote add origin https://github.com/astrobleem/oemdisplay-tandy.git
+          git -C upstream fetch --no-tags --depth=1 origin 8d48aa04560a4730c9ee3d946bed865ca9be0c43
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = 8d48aa04560a4730c9ee3d946bed865ca9be0c43
+          python3 upstream/tools/BUILDDEPS/DEPS.PY fetch --lock upstream/tools/BUILDDEPS/LOCK.JSON --out dep-git
+          python3 upstream/tools/BUILDDEPS/DEPS.PY materialize --lock upstream/tools/BUILDDEPS/LOCK.JSON --repo dep-git --out deps
+          python3 upstream/tools/BUILDDEPS/DEPS.PY verify --lock upstream/tools/BUILDDEPS/LOCK.JSON --deps deps
+          python3 upstream/tools/BUILDDEPS/DEPS.PY view \
+            --lock upstream/tools/BUILDDEPS/LOCK.JSON --deps deps \
+            --source-repo upstream \
+            --source-commit 8d48aa04560a4730c9ee3d946bed865ca9be0c43 \
+            --profile display --out view
+          mkdir -p view/experiments view/src/rrect
+          for d in HPAN XYPAN XYRRECT; do
+            cp -a "upstream/experiments/$d" "view/experiments/$d"
+          done
+          cp -a upstream/src/rrect/RRPATCH.PY view/src/rrect/
+
+      - name: Build XR155 8088-safe HPXY with bounded XY GDI output and memory gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/hpxy_speed/build_xr155.py view /usr/bin/dosbox-x build-xr155
+          mkdir -p package
+          cp build-xr155/XR155.DRV package/
+          cp build-xr155/XR155_REPORT.json package/
+          cp build-xr155/RESULT.json package/BASE_DRIVER_AUDIT.json
+          (cd package && sha256sum XR155.DRV > XR155.DRV.sha256)
+
+      - name: Fetch byte-identical physical Tandy gold-standard CF image
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download tandy1000ex-win30-pan-border2-three-groups-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img \
+            --dir package
+          echo 'd781c144c059f47da488ea1546c242bc63856a04eaf34b4cf98f3c65399bfcf5  package/TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img' | sha256sum -c -
+          cp package/TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img \
+            package/TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img
+
+      - name: Insert experimental driver as separate filename and reversible DOS switch
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMG='package/TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img@@32256'
+          mkdir -p stage
+          mcopy -i "$IMG" ::/WINDOWS/SYSTEM.INI stage/HPXY.INI
+          python3 - <<'PY'
+          from pathlib import Path
+          raw=Path('stage/HPXY.INI').read_bytes()
+          assert raw.count(b'display.drv=HPXY.DRV')==1
+          assert b'mouse.drv=msmouse1.drv' in raw.lower()
+          assert b'fonts.fon=XTCSYS.FON' in raw
+          patched=raw.replace(b'display.drv=HPXY.DRV',b'display.drv=XR155.DRV')
+          assert patched.count(b'display.drv=XR155.DRV')==1
+          Path('stage/FAST.INI').write_bytes(patched)
+          scripts={
+            'FASTXY.BAT':[
+              '@ECHO OFF','REM Experimental XR155, execute only after leaving Windows.',
+              'COPY C:\\TANDY88\\SYSFAST.INI C:\\WINDOWS\\SYSTEM.INI',
+              'IF ERRORLEVEL 1 GOTO FAIL',
+              'ECHO XR155 faster-drawing driver selected. Type WIN.',
+              'GOTO END',':FAIL','ECHO Restore failed. Do not start Windows.',' :END'
+            ],
+            'GOLDXY.BAT':[
+              '@ECHO OFF','REM Restore exact hardware-tested HPXY display selection.',
+              'COPY C:\\TANDY88\\SYSHPXY.INI C:\\WINDOWS\\SYSTEM.INI',
+              'IF ERRORLEVEL 1 GOTO FAIL',
+              'ECHO Original gold-standard HPXY selected. Type WIN.',
+              'GOTO END',':FAIL','ECHO Restore failed. Do not start Windows.',' :END'
+            ]
+          }
+          for name,lines in scripts.items():
+            lines=[s.strip() if s==' :END' else s for s in lines]
+            Path('stage/'+name).write_bytes(('\r\n'.join(lines)+'\r\n').encode('ascii'))
+          PY
+          mcopy -o -i "$IMG" package/XR155.DRV ::/WINDOWS/SYSTEM/XR155.DRV
+          mcopy -o -i "$IMG" stage/HPXY.INI ::/TANDY88/SYSHPXY.INI
+          mcopy -o -i "$IMG" stage/FAST.INI ::/TANDY88/SYSFAST.INI
+          mcopy -o -i "$IMG" stage/FAST.INI ::/WINDOWS/SYSTEM.INI
+          for b in FASTXY.BAT GOLDXY.BAT; do mcopy -o -i "$IMG" "stage/$b" "::$b"; done
+
+      - name: Verify original Games, desktop, mouse, fonts, panning and all DOS bytes preserved
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys,struct,hashlib,json
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          old=Fat16(bytearray(Path('package/TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img').read_bytes()))
+          new=Fat16(bytearray(Path('package/TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img').read_bytes()))
+          assert len(old.b)==len(new.b)==31808*512
+          assert old.b[:old.part]==new.b[:new.part]
+          fbytes=struct.unpack_from('<H',new.b,new.part+22)[0]*512
+          assert new.b[new.fat:new.fat+fbytes]==new.b[new.fat+fbytes:new.fat+2*fbytes], 'FAT mismatch'
+          def inventory(fs):
+            d={}
+            def walk(parent='',first=None):
+              for _,name,flags,cluster,size in fs.entries(first):
+                if name in ('.','..'):continue
+                path=parent+'/'+name
+                if flags&16:walk(path,cluster)
+                else:d[path]=hashlib.sha256(fs.read(path)).hexdigest()
+            walk();return d
+          a,b=inventory(old),inventory(new)
+          assert set(a)-set(b)==set(),'No original file may be deleted'
+          assert {k for k in a if a[k]!=b[k]}=={'/WINDOWS/SYSTEM.INI'},'Only display selection can change'
+          assert set(b)-set(a)=={'/WINDOWS/SYSTEM/XR155.DRV','/TANDY88/SYSHPXY.INI',
+                                '/TANDY88/SYSFAST.INI','/FASTXY.BAT','/GOLDXY.BAT'}
+          expected=json.loads(Path('package/XR155_REPORT.json').read_text())
+          driver=new.read('/WINDOWS/SYSTEM/XR155.DRV')
+          assert hashlib.sha256(driver).hexdigest()==expected['sha256']
+          assert new.read('/TANDY88/SYSHPXY.INI')==old.read('/WINDOWS/SYSTEM.INI')
+          assert new.read('/TANDY88/SYSFAST.INI')==new.read('/WINDOWS/SYSTEM.INI')
+          assert b'DISPLAY.DRV=XR155.DRV' in new.read('/WINDOWS/SYSTEM.INI').upper()
+          for path in ('/WINDOWS/WIN.INI','/WINDOWS/PROGMAN.INI','/WINDOWS/MAIN.GRP',
+                       '/WINDOWS/ACCESSOR.GRP','/WINDOWS/GAMES.GRP','/WINDOWS/SYSTEM/HPXY.DRV',
+                       '/WINDOWS/SYSTEM/MSMOUSE1.DRV','/WINDOWS/SYSTEM/XTCSYS.FON',
+                       '/WINDOWS/SYSTEM/XTCFIX.FON','/WINDOWS/SYSTEM/XTCOEM.FON',
+                       '/WINDOWS/PAN.EXE','/WINDOWS/XYCTL.EXE','/AUTOEXEC.BAT',
+                       '/CONFIG.SYS','/WIN.BAT','/CTMOUSE.EXE','/PANON.BAT','/PANOFF.BAT'):
+            assert new.read(path)==old.read(path),path
+          for k in a:
+            if k.endswith('.GRP') or '/GAMES/' in k:
+              assert a[k]==b[k],k
+          assert b'RESERVE.COM' in new.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in new.read('/WIN.BAT').upper()
+          print('PASS all original',len(a),'files preserved, exactly one INI changed and five new files added')
+          print('PASS identical Program Manager three-row geometry, Games and icons, PAN utility, original HPXY driver, serial mouse and DOS protected launcher')
+          PY
+          (cd package && sha256sum TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img > TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img.sha256)
+
+      - name: Upload separate speed-test disk and driver to GitHub Actions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_EX_HPXYSPEED_XR155_16COLOR_CF_Test
+          path: |
+            package/TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img
+            package/TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img.sha256
+            package/XR155.DRV
+            package/XR155_REPORT.json
+            package/XR155.DRV.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish experimental prerelease without changing existing gold standard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-hpxyspeed-xr155-trial-2026-11-06
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Refusing to modify existing release'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            package/TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img \
+            package/TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img.sha256 \
+            package/XR155.DRV \
+            package/XR155_REPORT.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'EXPERIMENTAL Tandy EX HPXY XR155 faster GDI drawing, 16 colors, 640x256 pan' \
+            --notes 'A/B physical Tandy 1000 EX test only. Derived from the hardware-verified gold-standard three-row, 16-color 640x256 panning CF image. Compiled experimental XR155 driver improves bounded X/Y drawing operations; not a hardware speed claim. All original 389+ files, three rows and games, mouse, fonts, protected DOS WIN.BAT and HPXY.DRV remain unchanged. Exactly one SYSTEM.INI display selection changed and five new files added. From DOS type WIN; if slower or unstable, exit/reboot to DOS and type GOLDXY then WIN for the exact original HPXY display driver. FASTXY then WIN reselects the XR155 test. Keep the gold-standard release archived unchanged. A complete panning + drawing visual/cursor test on physical hardware is required.' \
+            --prerelease --latest=false
