@@ -108,6 +108,7 @@ def main():
     sources = {
         "TR53216.DRV": (a.display_driver, DRIVER_SHA),
         "RESERVE.COM": (a.reserve_helper, RESERVE_SHA),
+        "CGA.GR2": (a.font_directory/"CGA.GR2", "1fc24254a1b76c2030a0ae60e25a17d6df4730c2a99d293ca22886059d8be067"),
     }
     sources.update((name, (a.font_directory/name, sha)) for name, sha in FONT_SHAS.items())
     for name, (source, expected) in sources.items():
