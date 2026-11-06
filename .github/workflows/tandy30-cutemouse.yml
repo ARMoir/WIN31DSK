@@ -6,7 +6,12 @@ on:
     branches: [TANDY30]
     paths:
       - '.github/workflows/tandy30-cutemouse.yml'
-      - 'tools/tandy30/**'
+      - 'tools/tandy30/build_cutemouse.sh'
+      - 'tools/tandy30/build_mouse.py'
+      - 'tools/tandy30/shrink_cf.py'
+      - 'tools/tandy30/mtest.s'
+      - 'tools/tandy30/win104_msmouse1.drv.gz.b64'
+      - 'tools/tandy30/int33-test/original_mouse.b64.*'
       - 'builds/TANDY1000EX_WIN30_NOGAMES_16MB.img'
 
 permissions:
