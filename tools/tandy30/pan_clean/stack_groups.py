@@ -29,7 +29,9 @@ def digest(b):
 
 def guest_read(image, name, staging):
     target = staging / (name.replace("/", "_"))
-    subprocess.run(["mcopy", "-n", "-i", str(image) + "@@32256", "::/" + name, str(target)], check=True)
+    if target.exists():
+        target.unlink()
+    subprocess.run(["mcopy", "-i", str(image) + "@@32256", "::/" + name, str(target)], check=True)
     return target.read_bytes()
 
 def guest_write(image, name, payload, staging):
