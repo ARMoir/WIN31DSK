@@ -1,5 +1,40 @@
 # Tandy 1000 EX, Windows 3.0, 320x200 16 colors: OEM Setup control test
 
+## Important: Windows 3.0 Setup maintenance mode fix (November 6, 2026)
+
+The original experimental Release's `SETUP16.BAT` ran
+`C:\WINDOWS\SETUP.EXE` **from the root DOS directory**, which accidentally
+started the new-installation wizard. The user encountered the error
+*"The Windows 3.0 installation directory you have specified is not valid"*.
+**Do not continue that installer. Press F3 to exit.**
+
+On the already-flashed experimental CF image, **do not reflash**.
+Run the installed DOS Setup from within its actual Windows directory:
+
+```dos
+C:
+CD \WINDOWS
+SETUP
+```
+
+Microsoft Windows 3.0 Setup then opens the **existing-installation maintenance**
+screen, where Display / Other can install the OEM driver from `C:\WINXT`,
+without reinstalling Windows. If a new-installation welcome screen appears
+again, exit without proceeding. Keep the mouse setting unchanged and decline
+any DOS boot-file rewrites.
+
+The workflow `.github/workflows/tandy30-16color-oemsetup.yml` has been
+corrected to generate a future `SETUP16.BAT` that changes into
+`C:\WINDOWS` before invoking `SETUP.EXE`, but the **already-published test
+Release asset is unchanged**. The manual commands above are the right
+instructions for that specific downloaded image.
+
+Source: Microsoft KB Q63484, Installing Third-Party Windows 3.0 Drivers:
+https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/63484
+
+---
+
+
 **Status: GitHub build validated. Real Tandy hardware NOT tested with this new image.**
 
 [Download separate experimental CF image](https://github.com/ARMoir/WIN31DSK/releases/download/tandy1000ex-win30-16color-oem-setup-test-2026-11-06/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img) |
@@ -84,10 +119,12 @@ display driver.
 
 **Step 2, ONLY after the stock-display control succeeds.**
 
-Exit Windows normally, return to the DOS prompt, and type:
+Exit Windows normally, return to the DOS prompt, and start Setup in maintenance mode **from inside C:\\WINDOWS**:
 
 ```dos
-SETUP16
+C:
+CD \\WINDOWS
+SETUP
 ```
 
 Inside Windows 3.0 Setup, select **Display**, then **Other**, enter
