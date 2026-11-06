@@ -1,5 +1,46 @@
 # Tandy 1000 EX, Windows 3.0, 320x200 16 colors: OEM Setup control test
 
+## Physical A/B result: original graphics driver ALSO crashes with XT settings
+
+**CONFIRMED ON PHYSICAL TANDY, November 6, 2026:** The owner restored
+the Windows XT `XTTEST.INI` configuration, manually changed only
+`display.drv=TR53216.DRV` to `display.drv=TANDYDSP.DRV`, and started
+Windows from the root guarded `WIN` launcher. **Windows still crashed.**
+
+This completes an important controlled result:
+
+| Configuration | Real Tandy result |
+| --- | --- |
+| Stock `SYSOLD.INI` + stock `TANDYDSP.DRV` | Windows desktop **works** |
+| Windows XT `XTTEST.INI` + `TR53216.DRV` | Windows exits to DOS after splash |
+| Windows XT `XTTEST.INI` + stock `TANDYDSP.DRV` | Windows **also crashes** |
+
+**Conclusion:** The replacement driver alone is **not established as the
+cause** of the crash. Something else in the XT Setup configuration or
+installed resources can stop even the formerly working stock display.
+
+For recovery, restore the exact stock INI:
+
+```dos
+COPY C:\WINXT\SYSOLD.INI C:\WINDOWS\SYSTEM.INI
+```
+
+**Next low-risk controlled test:** From the working stock
+`SYSOLD.INI` configuration, change only the three font names under
+`[boot]` to the installed Windows XT font files
+(`fixedfon.fon=XTEFIX.FON`, `oemfonts.fon=XTEOEM.FON`,
+`fonts.fon=XTESYS.FON`), **keeping** `display.drv=TANDYDSP.DRV`,
+`mouse.drv=msmouse1.drv`, the video guard, DOS boot and every other
+`SYSTEM.INI` line unchanged. Back up `SYSTEM.INI` first.
+If the stock driver then crashes, the replacement font set is
+implicated. If it boots, the remaining XT settings or their combination
+must be tested separately. This test does not require reflashing.
+
+The known-good Windows 3.0 mouse release is immutable and unaffected.
+
+---
+
+
 ## Real-hardware A/B result: original four-color Windows boots (November 6, 2026)
 
 **CONFIRMED ON THE PHYSICAL TANDY:** The owner restored
