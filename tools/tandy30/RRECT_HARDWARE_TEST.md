@@ -49,3 +49,9 @@ Do not bypass a failed `RESERVE.COM` check. A failed graphics boot does not impl
 ## Validation and limits
 
 The build and FAT16 image validation check compiler/link audits, installed driver hash, exact original file readback, both FAT copies, cluster chains, identical mouse/boot/restore/font file content and unchanged card geometry. **No physical execution or cycle-calibrated native speed data has been obtained for this RRECT build.** Any release remains labeled experimental until the user tests it on their EX.
+
+## Physical EX video observation, November 6, 2026
+
+The owner supplied a roughly 23.8-second video of the newly published RRECT test image running Calculator on the real Tandy 1000 EX. Visible observations: Program Manager is present, Calculator launches without a visible crash, the 16-color window/menu and controls appear intact, and the keypad redraw proceeds gradually across the recording. The Calculator window is visible around seconds 5–6 and the complete visible keypad is apparent by approximately second 23, suggesting roughly 17 seconds of progressive rendering from first window appearance. A mouse pointer is visible at the end. These are approximate video-event intervals, **not an instrumented benchmark or evidence of a speed improvement over TRIAL7**. The capture does not provide a matched TRIAL7 timing, and no direct mouse-motion timing is derived from still frames.
+
+**Hardware status updated:** RRECT boots and visibly renders Calculator on the physical EX, with no obvious corruption during the supplied capture. Relative speed remains unverified. Preserve TRIAL7 as the known-working preferred fallback; do not promote RRECT to the default solely on this test.
