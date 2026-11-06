@@ -1,0 +1,109 @@
+name: Tandy 1000 EX 16-color memory diagnostics (V20 read-only)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-memdiag.yml'
+      - 'tools/tandy30/tandychk.s'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout TANDY30
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mtools binutils
+
+      - name: Build read-only 8086 TANDYCHK.COM
+        run: |
+          mkdir -p output
+          as --32 -o output/tandychk.o tools/tandy30/tandychk.s
+          ld -m elf_i386 -Ttext 0x100 --oformat binary -o output/TANDYCHK.COM output/tandychk.o
+          test "$(stat -c%s output/TANDYCHK.COM)" -ge 256
+          test "$(stat -c%s output/TANDYCHK.COM)" -le 4096
+          strings output/TANDYCHK.COM | grep -F 'BIOS KB at 0040:0013'
+          strings output/TANDYCHK.COM | grep -F 'DOS MCB terminal end'
+          sha256sum output/TANDYCHK.COM
+
+      - name: Download exact previous 16-color plain-DOS trial image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download tandy1000ex-win30-16color-plain-dos-test-2026-11-05 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img' \
+            --dir output
+          echo 'ee9a7a214faabd1af8c250f0e3937d0de184291de71242f52b2ab67403a1d526  output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img' | sha256sum -c -
+
+      - name: Add only diagnostic COM, preserving all original files
+        run: |
+          cp output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img \
+             output/TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img
+          mcopy -i 'output/TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img@@32256' \
+             output/TANDYCHK.COM ::/TANDYCHK.COM
+          test "$(stat -c%s output/TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img)" -eq 16285696
+          python3 - <<'PY'
+          import hashlib, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          base = Fat16(bytearray(Path('output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img').read_bytes()))
+          test = Fat16(bytearray(Path('output/TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img').read_bytes()))
+          for path in [
+              '/CONFIG.SYS', '/AUTOEXEC.BAT', '/CTMOUSE.EXE',
+              '/WINDOWS/SYSTEM.INI', '/WINDOWS/SYSTEM/MSMOUSE1.DRV',
+              '/WINDOWS/SYSTEM/TR53216.DRV', '/WINDOWS/SYSTEM/TANDYDSP.DRV',
+              '/WIN.BAT', '/WINXT/RESERVE.COM', '/WINXT/RESTORE.BAT',
+              '/WINXT/SYSOLD.INI', '/WINXT/CONFOLD.SYS'
+          ]:
+              assert test.read(path) == base.read(path), path
+          assert test.read('/TANDYCHK.COM') == Path('output/TANDYCHK.COM').read_bytes()
+          assert b'C:\\CTMOUSE.EXE /S14 /M' in test.read('/AUTOEXEC.BAT').upper()
+          assert b'RESERVE.COM' in test.read('/WIN.BAT').upper()
+          assert b'MOUSE.DRV=MSMOUSE1.DRV' in test.read('/WINDOWS/SYSTEM.INI').upper()
+          print('PASS: read-only diagnostics added, all DOS/Windows files unchanged')
+          PY
+          cd output
+          sha256sum TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img > TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img.sha256
+          sha256sum -c TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img.sha256
+
+      - name: Upload one diagnostic CF image and standalone COM
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S
+          path: |
+            output/TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img
+            output/TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img.sha256
+            output/TANDYCHK.COM
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate diagnostic GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-16color-memory-diagnostic-2026-11-05
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Diagnostic release exists; refusing to overwrite.'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img \
+            output/TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img.sha256 \
+            output/TANDYCHK.COM \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'DIAGNOSTIC: Tandy EX 16-color DOS memory probe (V20)' \
+            --notes 'Read-only DOS memory diagnostic, no Windows boot changes. Boot DOS, type TANDYCHK, photograph displayed values, then send the results. Original verified mouse release is unchanged. Never bypass RESERVE.COM.' \
+            --prerelease \
+            --latest=false
