@@ -41,6 +41,13 @@ Recovery copies are stored under `C:\TANDY88\SYSBASE.INI`, `WINBASE.INI`, `PRGBA
 
 The larger 640×256 virtual desktop gives oversized program windows room and lets you reach clipped sections by panning. **It does not make the physical monitor display more than 320×200 pixels at once**, nor does it cause nonresizable applications to shrink. With a larger shadow framebuffer it may use more conventional memory and may be slower than RRECT. The thin borders, compact icon organization, uncluttered desktop and reduced wallpaper work are independent usability improvements. This test does *not* include the separate compact titlebar OEM build, which has different font/driver compatibility risks.
 
+## Published build identity
+
+- [Successful GitHub Actions run #42289210112](https://github.com/ARMoir/WIN31DSK/actions/runs/42289210112)
+- Image SHA-256: `4f73b9c37a9d8b2dfbe12574a3cb7925c09f639e59945986a310c6aa81b22484`
+- Image size: `16,285,696` bytes (`31,808` 512-byte sectors)
+- Initial run #42289116823 passed the image and group-preservation checks but could not publish the release because the release notes were not yet committed. The corrected run completed all steps and uploaded the same type of full CF image.
+
 ## Build provenance and static validation
 
 - Input CF image checksum: `bedf5aa14c6259ad526074ce2412528a91f170feda9b3798befb78e8746f5e8b`.
