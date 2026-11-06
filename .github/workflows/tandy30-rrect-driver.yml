@@ -28,6 +28,11 @@ jobs:
           git -C upstream fetch --no-tags --depth=1 origin 4fe890a951d93826e9ced6dbb98934ef6e0dccd0
           git -C upstream checkout --detach FETCH_HEAD
           test "$(git -C upstream rev-parse HEAD)" = 4fe890a951d93826e9ced6dbb98934ef6e0dccd0
+          git init baseline
+          git -C baseline remote add origin https://github.com/astrobleem/oemdisplay-tandy.git
+          git -C baseline fetch --no-tags --depth=1 origin 1eac04fdc571f73037b502ecf1f085028271866e
+          git -C baseline checkout --detach FETCH_HEAD
+          test "$(git -C baseline rev-parse HEAD)" = 1eac04fdc571f73037b502ecf1f085028271866e
 
       - name: Fetch and verify exact archived 16-bit DDK and compiler bytes
         run: |
@@ -35,7 +40,7 @@ jobs:
           python3 upstream/tools/BUILDDEPS/DEPS.PY fetch --lock upstream/tools/BUILDDEPS/LOCK.JSON --out dep-git
           python3 upstream/tools/BUILDDEPS/DEPS.PY materialize --lock upstream/tools/BUILDDEPS/LOCK.JSON --repo dep-git --out deps
           python3 upstream/tools/BUILDDEPS/DEPS.PY verify --lock upstream/tools/BUILDDEPS/LOCK.JSON --deps deps
-          python3 upstream/tools/BUILDDEPS/DEPS.PY view --lock upstream/tools/BUILDDEPS/LOCK.JSON --deps deps --source-repo upstream --source-commit 4fe890a951d93826e9ced6dbb98934ef6e0dccd0 --profile display --out view
+          python3 upstream/tools/BUILDDEPS/DEPS.PY view --lock upstream/tools/BUILDDEPS/LOCK.JSON --deps deps --source-repo baseline --source-commit 1eac04fdc571f73037b502ecf1f085028271866e --profile display --out view
           cp -a upstream/src/rrect view/src/rrect
 
       - name: Reproduce exact original TR5 320x200x16 binary
@@ -43,13 +48,16 @@ jobs:
           set -euo pipefail
           python3 view/src/rrect/RRBUILD.PY --repo view --dosbox /usr/bin/dosbox-x --out build-original --mode 320x200x16 --variant baseline
           find build-original -maxdepth 1 -name '*.DRV' -ls
-          echo '33f681b0238310ae2614b3c1b923d260c816261442b1fa5cd51867c25a6cef61  build-original/TR53216.DRV' | sha256sum -c -
+          original="$(find build-original -maxdepth 1 -name '*.DRV' -type f -print -quit)"
+          test -n "$original"
+          echo "33f681b0238310ae2614b3c1b923d260c816261442b1fa5cd51867c25a6cef61  $original" | sha256sum -c -
 
       - name: Build only the bounded-update RRECT candidate and audit real-mode code
         run: |
           set -euo pipefail
           python3 view/src/rrect/RRBUILD.PY --repo view --dosbox /usr/bin/dosbox-x --out build-rrect --mode 320x200x16 --variant candidate
-          test -s build-rrect/TR53216.DRV
+          candidate="$(find build-rrect -maxdepth 1 -name '*.DRV' -type f -print -quit)"
+          test -s "$candidate"
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -62,7 +70,7 @@ jobs:
           print("PASS base/recompiled candidate audit",b["sha256"],b["bytes"])
           PY
           mkdir -p verified
-          cp build-rrect/TR53216.DRV verified/RRECT.DRV
+          cp "$candidate" verified/RRECT.DRV
           cp build-rrect/RRBUILD.JSN verified/
           sha256sum verified/RRECT.DRV > verified/SHA256SUMS
 
