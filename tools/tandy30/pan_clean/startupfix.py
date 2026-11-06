@@ -3,7 +3,7 @@
 
 Offline, on a copy of the owner's hardware-tested panning CF image. Only
 WINDOWS/WIN.INI and TANDY88/WINPAN.INI are edited, same lengths as originals.
-Original RRECT rollback snapshots, Program Manager and all .GRP files stay intact.
+Original RRECT rollback snapshots, Program Manager executable and every .GRP file stay intact.
 """
 from pathlib import Path
 import argparse, hashlib, re, shutil, subprocess
@@ -77,7 +77,23 @@ def main():
     write(a.output,"TANDY88/WINPAN.INI",update)
     assert read(a.output,"WINDOWS/WIN.INI",a.staging)==fixed
     assert read(a.output,"TANDY88/WINPAN.INI",a.staging)==fixed
-    print("Startup fix, BorderWidth=2:",str(a.output),sha(a.output.read_bytes()))
+    # Fit Program Manager's normal window into the initial physical
+    # 320x200 viewport. Preserve group paths and every .GRP byte.
+    old_pm=read(a.output,"WINDOWS/PROGMAN.INI",a.staging)
+    saved_pm=read(a.output,"TANDY88/PRGPAN.INI",a.staging)
+    assert old_pm==saved_pm,"PANON Program Manager snapshot disagrees with active config"
+    assert old_pm.count(b"Window=0 0 640 256 3")==1
+    updated_pm=old_pm.replace(b"Window=0 0 640 256 3",b"Window=0 0 316 196 1")
+    assert len(updated_pm)==len(old_pm)
+    for entry in [b"MAIN.GRP",b"ACCESSOR.GRP",b"GAMES.GRP",b"AutoArrange=1",b"MinOnRun=0"]:
+        assert entry in updated_pm,entry
+    pm_path=a.staging/"FIXPM.INI"
+    pm_path.write_bytes(updated_pm)
+    write(a.output,"WINDOWS/PROGMAN.INI",pm_path)
+    write(a.output,"TANDY88/PRGPAN.INI",pm_path)
+    assert read(a.output,"WINDOWS/PROGMAN.INI",a.staging)==updated_pm
+    assert read(a.output,"TANDY88/PRGPAN.INI",a.staging)==updated_pm
+    print("PASS: background panning, BorderWidth=2, Program Manager normal 316x196 viewport-sized window:",str(a.output),sha(a.output.read_bytes()))
 
 if __name__=="__main__":
     main()
