@@ -1,4 +1,4 @@
-name: Inspect Tandy Windows 3.0 16-color display package
+name: Tandy 1000 EX Windows 3.0 320x200 16-color experiment
 
 on:
   workflow_dispatch:
@@ -6,37 +6,104 @@ on:
     branches: [TANDY30]
     paths:
       - '.github/workflows/tandy30-16color.yml'
+      - 'tools/tandy30/color16_install.py'
+      - 'tools/tandy30/COLOR16_TEST.md'
 
 permissions:
   contents: read
 
 jobs:
-  inspect:
+  build-16-color:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - name: Download immutable upstream 16-color driver source package
-        run: |
-          mkdir -p staging
-          curl --fail --location --retry 3 --connect-timeout 15 --max-time 120 \
-            "https://raw.githubusercontent.com/astrobleem/oemdisplay-tandy/4fe890a951d93826e9ced6dbb98934ef6e0dccd0/downloads/experimental/FIXED/WINXT720.ZIP" \
-            -o staging/WINXT720.ZIP
-          test "$(git hash-object staging/WINXT720.ZIP)" = fc7054b1d2a2acf5ce143858b005dfe5365b9bda
-          unzip -l staging/WINXT720.ZIP
-          unzip -o -d staging/package staging/WINXT720.ZIP
-          find staging/package -maxdepth 3 -type f -printf '%p %s bytes\n'
-      - name: Extract FAT12 files from Tandy driver support floppy
+      - name: Checkout TANDY30 test builder
+        uses: actions/checkout@v4
+
+      - name: Install FAT16 image tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y mtools
-          find staging/package -type f -iname '*.img' -print | while read -r img; do
-            mdir -i "$img" :: || true
-            mkdir -p staging/extracted
-            mcopy -s -n -i "$img" ::/* staging/extracted/ || true
-          done
-          find staging/extracted -type f -printf '%P %s bytes\n' | sort
-      - uses: actions/upload-artifact@v4
+          sudo apt-get install -y mtools unzip
+
+      - name: Download exact real-hardware-verified Windows 3.0 and mouse CF image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p output
+          gh release download tandy1000ex-win30-mouse-verified-2026-11-05 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img' \
+            --dir output
+          echo 'eca08b0eb4283854bfef71d98d8febe08ad8de89eb3d52a109a0b9d39993fa34  output/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img' | sha256sum -c -
+
+      - name: Fetch checksum-pinned upstream Tandy 320x200 16-color driver package
+        run: |
+          mkdir -p staging/extracted staging/converted
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 120 \
+            'https://raw.githubusercontent.com/astrobleem/oemdisplay-tandy/4fe890a951d93826e9ced6dbb98934ef6e0dccd0/downloads/experimental/FIXED/WINXT720.ZIP' \
+            -o staging/WINXT720.ZIP
+          echo '8b3b07d788c665c926a60e0beb9152627d920894d572bdfa4730af58d0ec8440  staging/WINXT720.ZIP' | sha256sum -c -
+          unzip -oq staging/WINXT720.ZIP -d staging/package
+          test -f staging/package/WINXT720.IMG
+          mcopy -s -n -i staging/package/WINXT720.IMG ::/WINXT/* staging/extracted/
+          find staging/extracted -type f -printf '%P (%s bytes)\n' | sort
+
+      - name: Expand and verify the original 16-color driver and font binaries
+        run: |
+          SOURCE="$(dirname "$(find staging/extracted -type f -iname 'TR53216.DR_' -print -quit)")"
+          test -n "$SOURCE"
+          python3 tools/tandy30/int33-test/decompress_szdd.py "$SOURCE/TR53216.DR_" staging/converted/TR53216.DRV
+          python3 tools/tandy30/int33-test/decompress_szdd.py "$SOURCE/XTESYS.FO_" staging/converted/XTESYS.FON
+          python3 tools/tandy30/int33-test/decompress_szdd.py "$SOURCE/XTEFIX.FO_" staging/converted/XTEFIX.FON
+          python3 tools/tandy30/int33-test/decompress_szdd.py "$SOURCE/XTEOEM.FO_" staging/converted/XTEOEM.FON
+          cp "$SOURCE/CGA.GR2" staging/converted/CGA.GR2
+          cp "$SOURCE/RESERVE.COM" staging/converted/RESERVE.COM
+          cd staging/converted
+          echo 'ac0b2a72693b4ac7dd19a28f4f24f180a9c0b0ca0ccaa3dab2c9d1d33055290c  TR53216.DRV' | sha256sum -c -
+          echo '644290e234cab9a6ac3799fa32959bb493d82d566501a8925720bb5a28c6afa8  RESERVE.COM' | sha256sum -c -
+          echo '1fc24254a1b76c2030a0ae60e25a17d6df4730c2a99d293ca22886059d8be067  CGA.GR2' | sha256sum -c -
+
+      - name: Overlay new Tandy display only, preserving known-good serial mouse
+        run: |
+          python3 tools/tandy30/color16_install.py \
+            output/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img \
+            staging/converted/TR53216.DRV \
+            staging/converted/RESERVE.COM \
+            staging/converted \
+            output/TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img
+
+      - name: Check disk size, installed files, guarded manual startup and mouse preservation
+        run: |
+          test "$(stat -c%s output/TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img)" -eq 16285696
+          cd output
+          sha256sum -c TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img.sha256
+          cd ..
+          python3 - <<'PY'
+          import hashlib, re, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          base = Fat16(bytearray(Path('output/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img').read_bytes()))
+          new = Fat16(bytearray(Path('output/TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img').read_bytes()))
+          for name in ['/AUTOEXEC.BAT', '/CONFIG.SYS', '/CTMOUSE.EXE', '/WINDOWS/SYSTEM/MSMOUSE1.DRV', '/WINDOWS/SYSTEM/TANDYDSP.DRV']:
+              assert new.read(name) == base.read(name), name
+          ini = new.read('/WINDOWS/SYSTEM.INI')
+          assert re.search(rb'(?im)^display\.drv=TR53216\.DRV\s*$', ini)
+          assert re.search(rb'(?im)^mouse\.drv=msmouse1\.drv\s*$', ini)
+          assert new.read('/WINXT/SYSOLD.INI') == base.read('/WINDOWS/SYSTEM.INI')
+          assert b'RESERVE.COM' in new.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in new.read('/WIN.BAT').upper()
+          for name in ['TR53216.DRV', 'XTESYS.FON', 'XTEFIX.FON', 'XTEOEM.FON', 'CGA.GR2']:
+              assert new.read('/WINDOWS/SYSTEM/'+name) == Path('staging/converted/'+name).read_bytes()
+          print('Verified new display, guarded manual WIN, and unchanged known-good mouse and DOS startup')
+          PY
+
+      - name: Publish one 16-color experimental CF image and checksum
+        uses: actions/upload-artifact@v4
         with:
-          name: TANDY_16COLOR_SOURCE_INSPECTION
-          path: staging/
-          retention-days: 7
+          name: TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S
+          path: |
+            output/TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img
+            output/TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img.sha256
+          if-no-files-found: error
+          retention-days: 30
