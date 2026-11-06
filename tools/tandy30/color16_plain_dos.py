@@ -23,7 +23,7 @@ PLAIN = (r'''FILES=30
 BUFFERS=20
 DEVICE=C:\DOS\SETVER.EXE
 DOS=LOW
-REM No DOSMAX, USE!UMBS, or SHELLMAX. Normal DOS MCB arena.
+REM Use conventional DOS MCB arena with no upper-memory extensions.
 REM Legacy MOUSE.SYS disabled. AUTOEXEC loads CTMOUSE /S14 /M
 SHELL=C:\COMMAND.COM C:\ /E:256 /P
 '''.replace('\n','\r\n').encode('cp437'))
