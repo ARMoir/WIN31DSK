@@ -1,0 +1,105 @@
+name: Tandy 1000 EX 16-color video clean DOS memory follow-up
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-16color-plain-dos.yml'
+      - 'tools/tandy30/color16_plain_dos.py'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout build source
+        uses: actions/checkout@v4
+
+      - name: Install mtools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mtools
+
+      - name: Retrieve EXACT first 16-color trial image from preserved separate release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p output
+          gh release download tandy1000ex-win30-16color-experimental-2026-11-05 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img \
+            --dir output
+          echo 'd1cff2224f1b43b0be87b49e86905591268a564b4d55c42a6881899b93698453  output/TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img' | sha256sum -c -
+
+      - name: Build isolated conventional-DOS 16-color image
+        run: |
+          python3 tools/tandy30/color16_plain_dos.py \
+            output/TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img \
+            output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img
+
+      - name: Verify boot configuration, mouse, color driver, restore backup and image size
+        run: |
+          cd output
+          test "$(stat -c%s TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img)" -eq 16285696
+          sha256sum -c TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img.sha256
+          cd ..
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          read=lambda name: Fat16(bytearray(Path(name).read_bytes()))
+          old=read('output/TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S.img')
+          new=read('output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img')
+          config=new.read('/CONFIG.SYS').upper()
+          assert b'DOS=LOW' in config
+          assert b'SHELL=C:\\COMMAND.COM C:\\ /E:256 /P' in config
+          assert b'USE!UMBS' not in config
+          assert b'DOSMAX.EXE' not in config
+          assert b'SHELLMAX' not in config
+          assert b'CLEARMEM' not in config
+          assert new.read('/WINXT/CONFOLD.SYS') == old.read('/CONFIG.SYS')
+          for path in (
+              '/AUTOEXEC.BAT', '/CTMOUSE.EXE', '/WIN.BAT', '/WINXT/RESERVE.COM',
+              '/WINDOWS/SYSTEM.INI', '/WINDOWS/SYSTEM/MSMOUSE1.DRV',
+              '/WINDOWS/SYSTEM/TR53216.DRV', '/WINDOWS/SYSTEM/TANDYDSP.DRV',
+          ):
+              assert new.read(path) == old.read(path), path
+          restore=new.read('/WINXT/RESTORE.BAT').upper()
+          assert b'CONFOLD.SYS' in restore and b'SYSOLD.INI' in restore
+          print('PASS: mouse, protected manual WIN, 16-color driver preserved; DOSMAX unlinked; backup valid')
+          PY
+
+      - name: Upload one new experimental CF image
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S
+          path: |
+            output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img
+            output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate experimental GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-16color-plain-dos-test-2026-11-05
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to overwrite prior test artifacts.'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img \
+            output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'EXPERIMENTAL: Tandy 16-color with DOSMAX disabled' \
+            --notes-file tools/tandy30/COLOR16_DOSMAX_FOLLOWUP.md \
+            --prerelease \
+            --latest=false
+          echo "Release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
