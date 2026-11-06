@@ -20,7 +20,7 @@ Exit Windows (or reboot) and use PANOFF then WIN to restore the exact earlier RR
 ## Provenance
 
 - Baseline: earlier user-tested [640x256 logical pan/border1 image](https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-pan-16color-border1-clean-2026-11-06), SHA256 4f73b9c37a9d8b2dfbe12574a3cb7925c09f639e59945986a310c6aa81b22484.
-- New disk: [TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img](https://github.com/ARMoir/WIN31DSK/releases/download/tandy1000ex-win30-pan-border2-progman-2026-11-06/TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img), SHA256 d8d0a38c3bab6f5df1b1f94c90efbb9b34beb2e35b5b4c6e25e53a3ff9102328.
+- New disk (renamed GitHub asset, binary bytes unchanged): [TANDY1000EX_WIN30_PAN_16COLOR_BORDER2_PROGMAN_VISIBLE_CF.img](https://github.com/ARMoir/WIN31DSK/releases/download/tandy1000ex-win30-pan-border2-progman-2026-11-06/TANDY1000EX_WIN30_PAN_16COLOR_BORDER2_PROGMAN_VISIBLE_CF.img), SHA256 d8d0a38c3bab6f5df1b1f94c90efbb9b34beb2e35b5b4c6e25e53a3ff9102328.
 - Size unchanged: 16,285,696 bytes / 31,808 sectors.
 - [Build run #42292096866](https://github.com/ARMoir/WIN31DSK/actions/runs/42292096866) verified identical original file inventory; only four INI files changed: WINDOWS/WIN.INI and TANDY88/WINPAN.INI, WINDOWS/PROGMAN.INI and TANDY88/PRGPAN.INI. Both FAT copies and original partition data remain intact.
 
