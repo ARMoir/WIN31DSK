@@ -18,6 +18,16 @@ The source is the upstream [RRECT bounded-framebuffer experiment](https://github
 
 This RRECT candidate derives from TR5, not TRIAL7. The targeted polyline and non-drawing-marker optimizations can be more significant for certain large redraw workloads, but **some TRIAL7 short-text/border refinements are not included**. The physical test is an A/B comparison, not a blanket claim of superiority.
 
+## Published, verified image
+
+- [RRECT GitHub prerelease](https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-rrect-16color-test-2026-11-06)
+- [Direct CF image](https://github.com/ARMoir/WIN31DSK/releases/download/tandy1000ex-win30-rrect-16color-test-2026-11-06/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img)
+- Image SHA-256: `bedf5aa14c6259ad526074ce2412528a91f170feda9b3798befb78e8746f5e8b`
+- Image size: `16,285,696` bytes, `31,808` sectors
+- [Successful image build, Actions run #42279623049](https://github.com/ARMoir/WIN31DSK/actions/runs/42279623049)
+
+**No speed claim on real hardware yet.** The image is a separate, hardware-untested candidate; the user's TRIAL7 release remains the current proven fallback.
+
 ## CF image layout and safety
 
 The experimental disk image starts from the byte-exact, owner-tested TRIAL7 GitHub release (SHA-256 `73129da6ca249120ee7bb1902b6da6b31eca40753dabe2fcc2a8220372574774`). It adds `C:\WINDOWS\SYSTEM\RR8.DRV` under a new name, saves `C:\TANDY88\SYSRR.INI`, and selects `display.drv=RR8.DRV` under `[boot]` in `C:\WINDOWS\SYSTEM.INI`. Both older drivers remain installed, including TRIAL7's `TR73216.DRV` and the hardware-working `TR53216.DRV`.
