@@ -1,0 +1,46 @@
+name: Preserve hardware-verified Tandy EX gold-standard release
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-gold-standard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify original gold-standard CF bytes without modifying image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-pan-border2-three-groups-2026-11-06
+          IMAGE: TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$IMAGE" --dir .
+          echo "d781c144c059f47da488ea1546c242bc63856a04eaf34b4cf98f3c65399bfcf5  $IMAGE" | sha256sum -c -
+          test "$(stat -c%s "$IMAGE")" -eq 16285696
+          echo 'PASS: exact original hardware-confirmed CF image and 31,808 sectors are unchanged'
+
+      - name: Record physical layout verification and mark immutable baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-pan-border2-three-groups-2026-11-06
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "GOLD STANDARD (real Tandy EX verified): Windows 3.0 16-color PAN, Border 2, three groups" \
+            --notes-file tools/tandy30/pan_clean/THREE_ROW_GROUPS.md \
+            --prerelease=false --latest=false
+          # Re-read published release asset identity. Never upload or replace files.
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets,isPrerelease,name \
+            --jq '{title: .name, prerelease: .isPrerelease, assets: [.assets[] | {name, size, digest}]}'
