@@ -49,11 +49,13 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path('view/src/tandysw/BUILD88.PY')
-          s=p.read_bytes()
-          old=b'if args.mode == "320x200x16":\n        assert resource_sha == baseline.RESOURCE_SHA'
-          new=b'if args.mode == "320x200x16" and os.environ.get("TANDY_UI_PROFILE") != "compact320":\n        assert resource_sha == baseline.RESOURCE_SHA'
-          assert s.count(old)==1
-          p.write_bytes(s.replace(old,new))
+          s=p.read_text()
+          old='if args.mode == "320x200x16":\\n        assert resource_sha == baseline.RESOURCE_SHA'
+          new='if args.mode == "320x200x16" and os.environ.get("TANDY_UI_PROFILE") != "compact320":\\n        assert resource_sha == baseline.RESOURCE_SHA'
+          old=old.replace('\\n','\n')
+          new=new.replace('\\n','\n')
+          assert s.count(old)==1, 'Expected one pinned original TR5 resource assertion'
+          p.write_text(s.replace(old,new))
           print('Noncompact resource pin retained; compact resource hash recorded independently in RESULT.json')
           PY
 
