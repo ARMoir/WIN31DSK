@@ -1,5 +1,11 @@
 # Tandy 1000 EX 16-color display: DOSMAX memory arena failure and second trial
 
+**TEST BUILD AVAILABLE:** [Download the plain-DOS 16-color experimental CF image](https://github.com/ARMoir/WIN31DSK/releases/download/tandy1000ex-win30-16color-plain-dos-test-2026-11-05/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img) or [view its Release](https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-16color-plain-dos-test-2026-11-05). [Successful GitHub Actions run #42142849182](https://github.com/ARMoir/WIN31DSK/actions/runs/42142849182).
+
+- Size: 16,285,696 bytes (31,808 sectors).
+- SHA-256: `ee9a7a214faabd1af8c250f0e3937d0de184291de71242f52b2ab67403a1d526`.
+- Artifact and GitHub Release are **experimental; actual video reservation and Windows startup must still be tested on the Tandy**.
+
 ## Real hardware result on first 16-color image
 
 On the original Tandy 1000 EX, the experimental
