@@ -1,6 +1,6 @@
 # Three-row Program Manager home screen, Tandy 1000 EX
 
-**Status, 2026-11-06:** Built and checked successfully in GitHub Actions, **hardware test pending**. This is a separate CF test image. The previously tested 16-color panning/border-2 image remains unchanged.
+**Status, 2026-11-06: GOLD STANDARD, HARDWARE-VERIFIED DESKTOP LAYOUT.** The owner booted this exact image on their real Tandy 1000 EX with NEC V20 and Tandy CM-5 RGB monitor. Their supplied photograph visibly confirms Program Manager at startup, with Main at the top, Accessories in the middle, and Games at the bottom. All three groups are open as one-row strips, with visible horizontal scrollbars and icon labels. The owner explicitly chose it as the new gold-standard baseline. Performance, every individual game, and every panning key combination are **not** independently measured or exhaustively tested in this image. Preserve the preceding panning and RRECT CF releases unchanged as recovery choices.
 
 ## Download
 
@@ -38,11 +38,19 @@ Based on the preceding tested image's exact SHA256 `d8d0a38c3bab6f5df1b1f94c90ef
 
 The original all-games executables, shortcuts, icon bitmaps, group paths and other files remain untouched. Preserved: border 2; 640×256 logical pan / 320×200 16-color physical view; PAN in WIN.INI load= background start; original Windows serial mouse and DOS CuteMouse settings; HPXY display driver; original fonts; guarded WIN.BAT with TGA3 and RESERVE; and PANON/PANOFF/REST7 scripts.
 
+## Physical-machine acceptance, November 6, 2026
+
+The owner shared a photograph of the actual Tandy CM-5 showing Windows 3.0 Program Manager, Main / Accessories / Games simultaneously visible and ordered correctly. The screenshot includes the original File Manager, Control Panel, Print Manager, Clipboard, Write, Paintbrush, Terminal, Notepad, Solitaire, Reversi, ZZT and SkiFree icons, with remaining icons accessible by horizontal group scrolling. The current 320x200 hardware viewport has visible title bars, borders and scrollbars, with no obvious redraw corruption in the photograph. The owner confirmed: "Yes this is the new gold standard!"
+
+Acceptance is limited to the visually confirmed startup and layout. Panning and its 640x256 logical desktop were demonstrated on the preceding panning image on physical hardware. Retain those controls in this build, but don't claim full panning-key coverage or exhaustive application testing.
+
+This exact SHA-256 is now an immutable reference baseline for future graphics, panning and Windows UI experiments. Do not rebuild or replace its GitHub release asset. Publish subsequent experiments using distinct versioned filenames/tags.
+
 ## Physical test
 
 Flash this separate image to a suitable CF card, boot DOS, and type `WIN`. Check that all three one-icon-row group windows are visible, menus and icons are not vertically clipped, Program Manager starts in front, and horizontal group scrollbars expose all extra game and accessory icons. For panning use Ctrl+Alt+arrows and Ctrl+Alt+Home. To return from DOS to the original RRECT desktop, use `PANOFF` followed by `WIN`. A working previous pan/border-2 CF image should be retained as fallback.
 
-If any group row is clipped due to actual Windows 3.0 titlebar/scrollbar metrics, the next iteration should adjust its rectangle heights; this was not asserted as physically tested. The compiler was not used to recompile Program Manager or modify Microsoft's original programs.
+The owner's physical photograph confirms the three group rows fit the initial viewport. Future refinements must use separate experimental images and must not modify this baseline. The compiler was not used to recompile Program Manager or modify Microsoft's original programs.
 
 ## Source of file format
 
