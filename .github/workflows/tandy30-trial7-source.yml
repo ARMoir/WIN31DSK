@@ -1,0 +1,39 @@
+name: Retrieve verified upstream TRIAL7 graphics candidate
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-trial7-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retrieve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download pinned upstream 16-color performance candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o TRIAL7.ZIP https://raw.githubusercontent.com/astrobleem/oemdisplay-tandy/main/experiments/TRIAL7/TRIAL7.ZIP
+          echo 'a34deee520743858e89f5fab17f00cb16f9692196d02960f623f29cd2b827d6c  TRIAL7.ZIP' | sha256sum -c -
+          unzip -Z1 TRIAL7.ZIP | tee files.txt
+          candidate="$(unzip -Z1 TRIAL7.ZIP | grep -iE '(^|/)NEW/TR53216.DRV$' | head -n1)"
+          test -n "$candidate"
+          mkdir -p artifact
+          unzip -p TRIAL7.ZIP "$candidate" > artifact/TR53216.DRV
+          test "$(stat -c%s artifact/TR53216.DRV)" = 55904
+          echo 'f922f12168de69ec2f8a761ce7fce2cbe2080b9e3fcfb06e3a3dac4faba6d502  artifact/TR53216.DRV' | sha256sum -c -
+          cp files.txt artifact/TRIAL7_FILES.txt
+          cp TRIAL7.ZIP artifact/
+      - name: Upload pinned verified driver and source archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tandy-trial7-driver
+          path: artifact/*
+          if-no-files-found: error
+          retention-days: 30
