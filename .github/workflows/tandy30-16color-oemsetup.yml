@@ -1,0 +1,166 @@
+name: Tandy EX Windows 3.0 16-color OEM Setup control test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-16color-oemsetup.yml'
+      - 'tools/tandy30/tandy_mode3.s'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CF/FAT16 and 8086 assembler utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mtools unzip binutils
+
+      - name: Fetch exact prior plain-DOS trial and verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p output
+          gh release download tandy1000ex-win30-16color-plain-dos-test-2026-11-05 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img' \
+            --dir output
+          echo 'ee9a7a214faabd1af8c250f0e3937d0de184291de71242f52b2ab67403a1d526  output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img' | sha256sum -c -
+          cp output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img \
+             output/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img
+
+      - name: Prepare checksum-pinned OEM video driver and display support media
+        run: |
+          mkdir -p staging/zip staging/disk staging/expanded
+          curl -fL --retry 3 --max-time 120 \
+            'https://raw.githubusercontent.com/astrobleem/oemdisplay-tandy/4fe890a951d93826e9ced6dbb98934ef6e0dccd0/downloads/experimental/FIXED/WINXT720.ZIP' \
+            -o staging/WINXT720.ZIP
+          echo '8b3b07d788c665c926a60e0beb9152627d920894d572bdfa4730af58d0ec8440  staging/WINXT720.ZIP' | sha256sum -c -
+          unzip -oq staging/WINXT720.ZIP -d staging/zip
+          mcopy -s -n -i staging/zip/WINXT720.IMG ::/WINXT/* staging/disk/
+          test -s staging/disk/WINXT/OEMSETUP.INF
+          python3 tools/tandy30/int33-test/decompress_szdd.py staging/disk/WINXT/TR53216.DR_ staging/expanded/TR53216.DRV
+          python3 tools/tandy30/int33-test/decompress_szdd.py staging/disk/WINXT/XTESYS.FO_ staging/expanded/XTESYS.FON
+          python3 tools/tandy30/int33-test/decompress_szdd.py staging/disk/WINXT/XTEFIX.FO_ staging/expanded/XTEFIX.FON
+          python3 tools/tandy30/int33-test/decompress_szdd.py staging/disk/WINXT/XTEOEM.FO_ staging/expanded/XTEOEM.FON
+          echo 'ac0b2a72693b4ac7dd19a28f4f24f180a9c0b0ca0ccaa3dab2c9d1d33055290c  staging/expanded/TR53216.DRV' | sha256sum -c -
+          echo '644290e234cab9a6ac3799fa32959bb493d82d566501a8925720bb5a28c6afa8  staging/disk/WINXT/RESERVE.COM' | sha256sum -c -
+
+      - name: Assemble standalone BIOS text mode 3 command for V20
+        run: |
+          as --32 -o staging/tga3.o tools/tandy30/tandy_mode3.s
+          ld -m elf_i386 -Ttext 0x100 --oformat binary -o staging/TGA3.COM staging/tga3.o
+          test "$(stat -c%s staging/TGA3.COM)" -le 128
+          sha256sum staging/TGA3.COM
+
+      - name: Stage complete Windows OEM display sources and original stock display configuration
+        run: |
+          IMG='output/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img@@32256'
+          mcopy -o -i "$IMG" ::/WINXT/SYSOLD.INI staging/STOCK.INI
+          mcopy -o -i "$IMG" staging/STOCK.INI ::/WINDOWS/SYSTEM.INI
+          for file in OEMSETUP.INF CGA.GR2 XTSTATIC.LGO WXTSPL01.RLE README.TXT FONTINFO.TXT FONTLIC.TXT; do
+            mcopy -o -i "$IMG" "staging/disk/WINXT/$file" "::/WINXT/$file"
+          done
+          for file in TR53216.DRV XTESYS.FON XTEFIX.FON XTEOEM.FON; do
+            mcopy -o -i "$IMG" "staging/expanded/$file" "::/WINXT/$file"
+          done
+          mcopy -o -i "$IMG" staging/TGA3.COM ::/WINXT/TGA3.COM
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('staging')
+          launcher='''@ECHO OFF
+REM Manual Windows 3.0 start, never automatically from DOS startup.
+REM Restore text mode 3 BEFORE reserving Tandy shared video memory.
+C:\\WINXT\\TGA3.COM
+IF ERRORLEVEL 1 GOTO FAILED
+C:\\WINXT\\RESERVE.COM
+IF ERRORLEVEL 1 GOTO FAILED
+C:\\WINDOWS\\WIN.COM /R
+GOTO END
+:FAILED
+ECHO Video reservation failed. Windows was NOT started.
+:END
+'''
+          root.joinpath('WIN.BAT').write_bytes(launcher.replace('\n','\r\n').encode('cp437'))
+          setup='''@ECHO OFF
+ECHO Windows 3.0 OEM display Setup (separate experiment).
+ECHO Choose Display then Other and type C:\\WINXT
+ECHO Choose: Tandy EX/HX 320x200 16 colors.
+ECHO Keep your current mouse driver. Do not alter DOS startup.
+ECHO If prompted, select No Changes to CONFIG.SYS/AUTOEXEC.BAT.
+PAUSE
+C:\\WINDOWS\\SETUP.EXE
+'''
+          root.joinpath('SETUP16.BAT').write_bytes(setup.replace('\n','\r\n').encode('cp437'))
+          PY
+          mcopy -o -i "$IMG" staging/WIN.BAT ::/WIN.BAT
+          mcopy -o -i "$IMG" staging/SETUP16.BAT ::/SETUP16.BAT
+
+      - name: Verify exact CF size, original mouse, stock video until Setup, and OEM prerequisites
+        run: |
+          cd output
+          test "$(stat -c%s TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img)" -eq 16285696
+          sha256sum TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img > TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img.sha256
+          sha256sum -c TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img.sha256
+          cd ..
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys,re,hashlib
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          before=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img').read_bytes()))
+          after=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img').read_bytes()))
+          for f in ('/CONFIG.SYS','/AUTOEXEC.BAT','/CTMOUSE.EXE','/WINDOWS/SYSTEM/MSMOUSE1.DRV','/WINDOWS/SYSTEM/TANDYDSP.DRV','/WINDOWS/SETUP.EXE',
+                    '/WINXT/RESERVE.COM','/WINXT/RESTORE.BAT','/WINXT/CONFOLD.SYS'):
+            assert before.read(f)==after.read(f), f
+          assert after.read('/WINDOWS/SYSTEM.INI')==before.read('/WINXT/SYSOLD.INI')
+          ini=after.read('/WINDOWS/SYSTEM.INI').upper()
+          assert b'DISPLAY.DRV=TANDYDSP.DRV' in ini
+          assert b'MOUSE.DRV=MSMOUSE1.DRV' in ini
+          assert b'C:\\CTMOUSE.EXE /S14 /M' in after.read('/AUTOEXEC.BAT').upper()
+          assert not any(s.strip().startswith((b'WIN',b'CALL WIN')) for s in after.read('/AUTOEXEC.BAT').upper().splitlines())
+          for f in ('OEMSETUP.INF','TR53216.DRV','XTESYS.FON','XTEFIX.FON','XTEOEM.FON','CGA.GR2','XTSTATIC.LGO','WXTSPL01.RLE'):
+            assert len(after.read('/WINXT/'+f))>128, f
+          assert hashlib.sha256(after.read('/WINXT/TR53216.DRV')).hexdigest()=='ac0b2a72693b4ac7dd19a28f4f24f180a9c0b0ca0ccaa3dab2c9d1d33055290c'
+          assert b'C:\\WINXT\\TGA3.COM' in after.read('/WIN.BAT').upper()
+          assert b'C:\\WINXT\\RESERVE.COM' in after.read('/WIN.BAT').upper()
+          assert b'C:\\WINDOWS\\WIN.COM /R' in after.read('/WIN.BAT').upper()
+          assert b'C:\\WINDOWS\\SETUP.EXE' in after.read('/SETUP16.BAT').upper()
+          print('Verified separate OEM-Setup trial, stock display until Setup, exact mouse and DOS files preserved.')
+          PY
+
+      - name: Upload one separate bootable experimental CF image
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S
+          path: |
+            output/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img
+            output/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish a separate diagnostic prerelease, never replacing verified mouse build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-16color-oem-setup-test-2026-11-06
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release exists; not overwriting previous image."
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img \
+            output/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'EXPERIMENTAL: Tandy Windows 16-color OEM Setup control test' \
+            --notes 'Separate controlled test; not yet proven working. This CF boots DOS with the preserved Windows 1.04 COM1 mouse and the original 640x200 4-color TANDYDSP display selected. Manual WIN runs a Tandy BIOS text-mode-3 setter, reserves shared video RAM, then loads Windows 3.0. First test WIN before changing the display. If stock display works, exit Windows, run SETUP16 from DOS, select Display / Other / C:\WINXT / Tandy EX/HX 320x200 16 colors, preserve mouse and select No Changes to DOS files. Then manually run WIN again. Do not use this to replace the hardware-verified release.' \
+            --prerelease \
+            --latest=false
