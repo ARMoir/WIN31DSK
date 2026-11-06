@@ -58,8 +58,8 @@ jobs:
               prior = sector
               offset = sector * 512
               data[offset:offset+512] = raw[at+4:at+516]
-          assert data[510:512] == b'\\x55\\xaa'
-          assert data[32256+510:32256+512] == b'\\x55\\xaa'
+          assert data[510:512] == bytes((0x55, 0xaa))
+          assert data[32256+510:32256+512] == bytes((0x55, 0xaa))
           assert hashlib.sha256(data).hexdigest() == '73129da6ca249120ee7bb1902b6da6b31eca40753dabe2fcc2a8220372574774'
           dest.write_bytes(data)
           assert len(dest.read_bytes()) == len(data)
