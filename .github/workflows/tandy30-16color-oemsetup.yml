@@ -44,7 +44,7 @@ jobs:
             -o staging/WINXT720.ZIP
           echo '8b3b07d788c665c926a60e0beb9152627d920894d572bdfa4730af58d0ec8440  staging/WINXT720.ZIP' | sha256sum -c -
           unzip -oq staging/WINXT720.ZIP -d staging/zip
-          mcopy -s -n -i staging/zip/WINXT720.IMG ::/WINXT/* staging/disk/
+          mcopy -s -n -i staging/zip/WINXT720.IMG ::/* staging/disk/
           test -s staging/disk/WINXT/OEMSETUP.INF
           python3 tools/tandy30/int33-test/decompress_szdd.py staging/disk/WINXT/TR53216.DR_ staging/expanded/TR53216.DRV
           python3 tools/tandy30/int33-test/decompress_szdd.py staging/disk/WINXT/XTESYS.FO_ staging/expanded/XTESYS.FON
