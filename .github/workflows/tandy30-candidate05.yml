@@ -1,0 +1,145 @@
+name: Tandy EX Windows 3.0 16-color TANDY88 candidate05 alternate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-candidate05.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  candidate05-experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FAT16 tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mtools
+
+      - name: Retrieve exact previous OEM Setup control disk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p output staging
+          gh release download tandy1000ex-win30-16color-oem-setup-test-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img \
+            --dir output
+          echo '5d80da3674e64e5835d35d42fb1f6da5a3c6afff9f79f33ca354a4544c8d39cc  output/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img' | sha256sum -c -
+          cp output/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img output/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img
+
+      - name: Get checksum-pinned emulator-tested 8086 TANDY88.DRV and logo
+        run: |
+          UPSTREAM='https://raw.githubusercontent.com/astrobleem/oemdisplay-tandy/4fe890a951d93826e9ced6dbb98934ef6e0dccd0'
+          curl -fL --retry 3 --max-time 120 "$UPSTREAM/src/tandysw/bin/TANDY88.DRV" -o staging/TANDY88.DRV
+          curl -fL --retry 3 --max-time 120 "$UPSTREAM/src/splash/assets/TNDYLOGO.RLE" -o staging/TNDYLOGO.RLE
+          test "$(stat -c%s staging/TANDY88.DRV)" -eq 51296
+          echo 'ac1aadce894058ab6dbdeab2d2a3fd8673a8b4e78d8798198d295f61f32dafee  staging/TANDY88.DRV' | sha256sum -c -
+          echo 'e7a9c043ce3b9f9c78f7ff38bc68d211a0da32462e036abb7135f0602194f083  staging/TNDYLOGO.RLE' | sha256sum -c -
+
+      - name: Copy ORIGINAL Windows 3.0 EGA fonts and setup support
+        run: |
+          IMG='output/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img@@32256'
+          for fn in EGASYS.FON EGAFIX.FON EGAOEM.FON CGA.GR2 CGALOGO.LGO; do
+            mcopy -i "$IMG" "::/WINDOWS/SYSTEM/$fn" "staging/$fn"
+          done
+          cd staging
+          echo '8bd307d7886d0f2fdfc1de3da8253e294233d1c757fd9131a66405fca5825b09  EGASYS.FON' | sha256sum -c -
+          echo '6df45a74e5756dd0746bcee593be9ac4df4a35458c26bf4570b748def2d394cb  EGAFIX.FON' | sha256sum -c -
+          echo '05bd6ef11802bbca20473b0e409116fd8919c5bbcbbbc26b7ee2ea1f33ad23be  EGAOEM.FON' | sha256sum -c -
+          echo '1fc24254a1b76c2030a0ae60e25a17d6df4730c2a99d293ca22886059d8be067  CGA.GR2' | sha256sum -c -
+          echo 'd9609adff83a63fda7a67e5e8cd7ed3dfb73f42e4d9971697fd43465231da807  CGALOGO.LGO' | sha256sum -c -
+
+      - name: Create OEM Setup profile for ONLY TANDY88 candidate05
+        run: |
+          printf '%s\r\n' \
+            '; 8086 Windows 3.0 real-mode Tandy 1000 EX/HX 320x200x16 candidate05' \
+            '[data]' \
+            'Version = "3.0"' \
+            '[disks]' \
+            'a = ., "Tandy EX/HX candidate05 OEM Display", OEMSETUP.INF' \
+            '[display]' \
+            'TANDY88 = a:TANDY88.DRV, "Tandy EX/HX 320x200 16 colors (candidate05)", "133,96,72", a:CGA.GR2, a:CGALOGO.LGO,,,, a:TNDYLOGO.RLE' \
+            '[sysfonts]' \
+            'a:EGASYS.FON, "EGA System Font", "133,96,72"' \
+            '[fixedfonts]' \
+            'a:EGAFIX.FON, "EGA Fixed System Font", "133,96,72"' \
+            '[oemfonts]' \
+            'a:EGAOEM.FON, "EGA Terminal Font (USA/Europe)", "133,96,72", 1' \
+            > staging/OEMSETUP.INF
+          test -s staging/OEMSETUP.INF
+
+      - name: Install alternative OEM source files WITHOUT activating them
+        run: |
+          IMG='output/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img@@32256'
+          mmd -i "$IMG" ::/TANDY88
+          for fn in OEMSETUP.INF TANDY88.DRV TNDYLOGO.RLE EGASYS.FON EGAFIX.FON EGAOEM.FON CGA.GR2 CGALOGO.LGO; do
+            mcopy -o -i "$IMG" "staging/$fn" "::/TANDY88/$fn"
+          done
+
+      - name: Verify source Windows still uses original four-color display and working mouse
+        run: |
+          cd output
+          test "$(stat -c%s TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img)" -eq 16285696
+          sha256sum TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img > TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img.sha256
+          sha256sum -c TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img.sha256
+          cd ..
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys,hashlib
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          read=lambda f: Fat16(bytearray(Path(f).read_bytes()))
+          a=read('output/TANDY1000EX_WIN30_16COLOR_OEMSETUP_CF_31808S.img')
+          b=read('output/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img')
+          for f in ['/CONFIG.SYS','/AUTOEXEC.BAT','/CTMOUSE.EXE','/WIN.BAT',
+                    '/WINDOWS/SYSTEM.INI','/WINDOWS/SYSTEM/MSMOUSE1.DRV',
+                    '/WINDOWS/SYSTEM/TANDYDSP.DRV','/WINXT/RESERVE.COM',
+                    '/WINXT/RESTORE.BAT','/WINXT/SYSOLD.INI']:
+              assert a.read(f)==b.read(f),f
+          ini=b.read('/WINDOWS/SYSTEM.INI').upper()
+          assert b'DISPLAY.DRV=TANDYDSP.DRV' in ini
+          assert b'MOUSE.DRV=MSMOUSE1.DRV' in ini
+          assert b'RESERVE.COM' in b.read('/WIN.BAT').upper()
+          assert b'C:\\CTMOUSE.EXE /S14 /M' in b.read('/AUTOEXEC.BAT').upper()
+          for f in ['TANDY88.DRV','OEMSETUP.INF','EGASYS.FON','EGAFIX.FON',
+                    'EGAOEM.FON','CGA.GR2','CGALOGO.LGO','TNDYLOGO.RLE']:
+              assert b.read('/TANDY88/'+f)==Path('staging/'+f).read_bytes(),f
+          assert hashlib.sha256(b.read('/TANDY88/TANDY88.DRV')).hexdigest()=='ac1aadce894058ab6dbdeab2d2a3fd8673a8b4e78d8798198d295f61f32dafee'
+          print('PASS: candidate05 source staged, Windows still selects working TANDYDSP + Windows 1.04 COM1 mouse, original boot and guarded WIN untouched')
+          PY
+
+      - name: Upload one isolated alternate 16-color test image
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY1000EX_WIN30_CANDIDATE05_CF_31808S
+          path: |
+            output/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img
+            output/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish SEPARATE experimental prerelease, keep verified build unchanged
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-candidate05-16color-test-2026-11-06
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Candidate05 release already exists; refusing to overwrite.'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img \
+            output/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'EXPERIMENTAL: Tandy 1000 EX Windows 3.0 16-color TANDY88 candidate05' \
+            --notes-file tools/tandy30/COLOR16_CANDIDATE05.md \
+            --prerelease \
+            --latest=false
