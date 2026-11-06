@@ -1,4 +1,4 @@
-name: Tandy EX panning desktop: visible Program Manager, border 2
+name: 'Tandy EX panning desktop: visible Program Manager, border 2'
 
 on:
   push:
