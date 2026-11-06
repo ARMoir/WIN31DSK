@@ -138,3 +138,51 @@ image remains unchanged:
 https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-mouse-verified-2026-11-05
 
 ---
+
+## Follow-up diagnostic, November 6, 2026
+
+The read-only `TANDYCHK` photo from actual hardware reports:
+
+| Checked by RESERVE.COM | Actual Tandy value | Expected |
+| --- | --- | --- |
+| BIOS video mode | 3 | 3 |
+| INT 12h / BIOS BDA conventional KB | 624 / 624 (0270h) | 624 |
+| DOS version | 5.0 | 3+ |
+| ROM FFFF:000E | 00FF | 00FF |
+| ROM FC00:0000 | 0021 | 0021 |
+
+Every displayed platform condition meets the original reservation program's
+requirements. The diagnostic image **does not show the terminal DOS MCB
+boundary**, because its visible output stops at the first DOS MCB segment.
+Do not assume the top of the arena is 9C00h from this screenshot alone.
+
+The first plain-DOS run still printed the single generic `need Tandy,
+text mode 3, BIOS 624K and DOS 3+` error. Since all observed prerequisites
+match, we cannot explain that rejection reliably from the photo alone. It
+may reflect a value changing specifically at the time the reservation
+program is run; no new RAM settings should be guessed or forced.
+
+### Diagnostic error trace, exact upstream RESERVE.COM safety retained
+
+[Download the **separate** trace CF image](https://github.com/ARMoir/WIN31DSK/releases/download/tandy1000ex-win30-16color-reserve-trace-2026-11-06/TANDY1000EX_WIN30_16COLOR_RESVTRACE_CF_31808S.img).
+[Verified GitHub Actions build #42248257875](https://github.com/ARMoir/WIN31DSK/actions/runs/42248257875).
+
+- Image size: 16,285,696 bytes (31,808 sectors).
+- SHA-256: `55f0f111a64918caf78eec724825f8d00eef6afac00d9f79385de60b4f7492ee`.
+- The image is based on the **exact** plain-DOS 16-color experiment.
+- The only changed DOS file is `C:\WINXT\RESERVE.COM`. Its five original
+  initial failure jumps now print **distinct** messages (TRACE 1 through TRACE 5)
+  before taking the **same original failure/cleanup path**.
+- No original ROM, BDA, video, or DOS-version comparisons are relaxed or bypassed.
+  The memory reservation and safety checks after these five branches are
+  byte-for-byte unchanged.
+- DOS startup, working CuteMouse, Windows 1.04 COM1 mouse driver,
+  `TR53216.DRV`, recovery files, and the guarded manual `WIN` command
+  are all byte-for-byte unchanged.
+
+Test: flash a spare CF, boot DOS, and type `WIN` at `C:\>` (do not launch
+Windows automatically or bypass the guard). Photograph **any new
+`RESERVE TRACE` line**. If the trace identifies no initial failure, but
+`RESERVE.COM` fails later with an arena message, record that result.
+If the reservation succeeds and Windows starts, test colors and mouse
+separately. The archived known-good mouse release is untouched.
