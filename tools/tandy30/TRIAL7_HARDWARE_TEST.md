@@ -1,6 +1,6 @@
 # Tandy 1000 EX: 320×200×16, TRIAL7 rendering performance test (2026-11-06)
 
-**Status: CF image statically validated; physical TRIAL7 test pending.**
+**Status (2026-11-06): TRIAL7 boots on physical Tandy 1000 EX/NEC V20 hardware and is the owner's chosen current 16-color baseline. The owner reports no apparent slowdown versus TR5 but cannot reliably distinguish an improvement; no timed real-hardware benchmark has been performed.**
 
 The owner hardware-tested the original candidate05 16-color driver on a Tandy 1000 EX with NEC V20, then confirmed a substantial rendering improvement with the TR5 320×200×16 display driver. Mouse movement is smooth; GDI drawing is still slow. This follow-up changes **only the display-driver selection** and adds a third driver, with all mouse, font, DOS, and video-memory reservation components unchanged.
 
@@ -10,7 +10,7 @@ The owner hardware-tested the original candidate05 16-color driver on a Tandy 10
 | --- | --- | --- | --- |
 | Candidate05 | `TANDY88.DRV` | `ac1aadce894058ab6dbdeab2d2a3fd8673a8b4e78d8798198d295f61f32dafee` | Physical Windows/16-color boot confirmed, very slow |
 | TR5 | `TR53216.DRV` | `33f681b0238310ae2614b3c1b923d260c816261442b1fa5cd51867c25a6cef61` | Physical Windows boot and noticeably faster rendering confirmed |
-| TRIAL7 | `TR73216.DRV` | `f922f12168de69ec2f8a761ce7fce2cbe2080b9e3fcfb06e3a3dac4faba6d502` | Static image verification only; actual EX boot pending |
+| TRIAL7 | `TR73216.DRV` | `f922f12168de69ec2f8a761ce7fce2cbe2080b9e3fcfb06e3a3dac4faba6d502` | Physically boots; user reports no obvious performance regression versus TR5, improvement unmeasured; **current baseline** |
 
 TRIAL7 is the exact upstream `TRIAL7/NEW/TR53216.DRV` driver bytes, **renamed** to preserve the installed TR5 binary. Both have NE internal module name `DISPLAY`. Upstream original runtime ZIP SHA-256: `a34deee520743858e89f5fab17f00cb16f9692196d02960f623f29cd2b827d6c`.
 
@@ -26,7 +26,7 @@ No Microsoft image is committed. This branch's dedicated GitHub Actions workflow
 
 ## On the physical Tandy
 
-Flash **only** the separate test image onto a matching spare CF card. Boot to DOS and type `WIN` to invoke the unchanged mode-3/video-reservation guarded launcher. Windows Setup is **not** required. Measure Program Manager startup, window/dialog text and borders, moving windows, cursor response, and colors; do not assume any of the emulator speed ratios predict physical timing.
+The TRIAL7 image was tested successfully on the real EX and selected as the preferred current image. Use the [preserved GitHub TRIAL7 release](https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-trial7-16color-performance-2026-11-06) for repeat testing. Flash **only** the separate image onto a matching spare CF card. Boot to DOS and type `WIN` to invoke the unchanged mode-3/video-reservation guarded launcher. Windows Setup is **not** required. Measure Program Manager startup, window/dialog text and borders, moving windows, cursor response, and colors; do not assume any of the emulator speed ratios predict physical timing.
 
 From DOS with Windows closed:
 
@@ -35,5 +35,7 @@ From DOS with Windows closed:
 - `REST05` then `WIN` restores the earlier candidate05 configuration.
 
 These commands copy the exact saved `SYSTEM.INI` configurations, and **never bypass `RESERVE.COM`**. `WIN.BAT`, `MSMOUSE1.DRV`, `CTMOUSE.EXE`, the EGA fonts, and DOS startup remain byte-for-byte identical to the hardware-tested TR5 source. Both FAT16 mirrors, every file chain, readback of all pre-existing files, and exact physical image size passed validation.
+
+Owner result (2026-11-06): **"not any worse, but hard to tell if it was better"**. Preserve this as the subjective assessment; do not convert it into a verified speedup. No evidence yet of hardware-calibrated wall-clock improvement versus TR5. For subsequent optimizations, prioritize full-screen framebuffer conversion/redraw, retain the original serial-mouse and video-reservation configuration, and measure startup and redraw on the physical EX.
 
 The TRIAL7 upstream tests showed around 3.8× faster short labels with the pointer away, 26.5× faster direct vertical lines, and around 1.15× faster two-pixel rectangles in specific emulator workloads, **not full Windows**. Full-screen DIB/redraw cases saw no notable improvement. Further changes must be treated as separate, reversible experiments.
