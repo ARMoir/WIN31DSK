@@ -1,0 +1,95 @@
+name: Tandy EX 16-color video reservation platform-check trace
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-reserve-trace.yml'
+      - 'tools/tandy30/color16_reserve_trace.py'
+
+permissions:
+  contents: write
+
+jobs:
+  build-trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Retrieve exact plain-DOS 16-color test CF image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p output
+          gh release download tandy1000ex-win30-16color-plain-dos-test-2026-11-05 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img' \
+            --dir output
+          echo 'ee9a7a214faabd1af8c250f0e3937d0de184291de71242f52b2ab67403a1d526  output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img' | sha256sum -c -
+
+      - name: Trace only exact original first five RESERVE.COM guard-failure branches
+        run: |
+          python3 tools/tandy30/color16_reserve_trace.py \
+            output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img \
+            output/TANDY1000EX_WIN30_16COLOR_RESVTRACE_CF_31808S.img
+
+      - name: Validate unchanged configuration and byte-exact guard trampoline targets
+        run: |
+          test "$(stat -c%s output/TANDY1000EX_WIN30_16COLOR_RESVTRACE_CF_31808S.img)" -eq 16285696
+          cd output
+          sha256sum -c TANDY1000EX_WIN30_16COLOR_RESVTRACE_CF_31808S.img.sha256
+          cd ..
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, sys
+          sys.path.insert(0, 'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          sys.path.insert(0, 'tools/tandy30')
+          from color16_reserve_trace import trace_driver, RESERVE_ORIGINAL_SHA, CHECKS
+          original=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_16COLOR_PLAINDOS_CF_31808S.img').read_bytes()))
+          traced=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_16COLOR_RESVTRACE_CF_31808S.img').read_bytes()))
+          old=original.read('/WINXT/RESERVE.COM')
+          new=traced.read('/WINXT/RESERVE.COM')
+          assert hashlib.sha256(old).hexdigest() == RESERVE_ORIGINAL_SHA
+          assert new == trace_driver(old)
+          assert len(new) < 2048
+          for path in ('/CONFIG.SYS','/AUTOEXEC.BAT','/WIN.BAT','/CTMOUSE.EXE',
+                       '/WINDOWS/SYSTEM.INI','/WINDOWS/SYSTEM/MSMOUSE1.DRV',
+                       '/WINDOWS/SYSTEM/TR53216.DRV','/WINDOWS/SYSTEM/TANDYDSP.DRV',
+                       '/WINXT/RESTORE.BAT','/WINXT/SYSOLD.INI','/WINXT/CONFOLD.SYS'):
+            assert original.read(path) == traced.read(path), path
+          assert len(CHECKS)==5
+          print('All checks remain intact; each original failure branch now names the failing condition.')
+          print('No memory guard disabled; normal path and five tested instructions unchanged.')
+          PY
+
+      - name: Publish one diagnostic image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY1000EX_WIN30_16COLOR_RESVTRACE_CF_31808S
+          path: |
+            output/TANDY1000EX_WIN30_16COLOR_RESVTRACE_CF_31808S.img
+            output/TANDY1000EX_WIN30_16COLOR_RESVTRACE_CF_31808S.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separately labeled diagnostic GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-16color-reserve-trace-2026-11-06
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Diagnostic release already exists. Refusing to overwrite.'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_16COLOR_RESVTRACE_CF_31808S.img \
+            output/TANDY1000EX_WIN30_16COLOR_RESVTRACE_CF_31808S.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'DIAGNOSTIC: Tandy EX Windows 16-color reservation failure trace' \
+            --notes 'Experimental, not a working 16-color Windows image. Built from the exact plain-DOS 16-color test image with all mouse, display, DOS and Windows startup settings preserved. Only the five initial RESERVE.COM failure jump destinations are redirected to distinct diagnostic messages; every original safety comparison and memory-reservation operation is unchanged. Boot DOS, type WIN manually from C:\, photograph the RESERVE TRACE failure. If guard rejects, Windows is NOT started. Hardware-verified mouse release remains untouched.' \
+            --prerelease \
+            --latest=false
