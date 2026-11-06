@@ -1,6 +1,12 @@
 # Experimental Tandy 1000 EX Windows 3.0 in 320x200, 16 colors
 
-**STATUS: Built in GitHub Actions; real Tandy hardware test pending.**
+**STATUS: GitHub Actions build PASSED; real Tandy hardware test pending.**
+
+**[Download the 320×200 16-color experimental image from successful GitHub Actions run #42141079656](https://github.com/ARMoir/WIN31DSK/actions/runs/42141079656)**. Under **Artifacts**, download `TANDY1000EX_WIN30_320X200_16COLOR_CF_31808S`.
+
+- Image SHA-256: `d1cff2224f1b43b0be87b49e86905591268a564b4d55c42a6881899b93698453`
+- Image size: **16,285,696 bytes** (exactly 31,808 sectors).
+- Upstream driver files, installed mouse driver, DOS boot configuration, and manual guarded `WIN` command were verified by CI and independent artifact read-back. **This does not prove Windows loads or colors render on the physical machine.**
 
 This **separate experimental CompactFlash image** starts from the *exact*
 [verified working DOS/Windows mouse image](https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-mouse-verified-2026-11-05).
