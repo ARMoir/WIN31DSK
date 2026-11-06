@@ -1,0 +1,56 @@
+name: Inspect 320x200 compact Windows chrome compatibility
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-compact-inspect.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Install FAT image tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Inspect original Microsoft font files and native SYSTEM/Windows INI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p inspect
+          gh release download tandy1000ex-win30-rrect-16color-test-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img \
+            --dir inspect
+          IMAGE='inspect/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img@@32256'
+          echo 'bedf5aa14c6259ad526074ce2412528a91f170feda9b3798befb78e8746f5e8b  inspect/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img' | sha256sum -c -
+          mdir -i "$IMAGE" ::/WINDOWS/SYSTEM | head -75
+          for name in CGASYS.FON CGAFIX.FON CGAOEM.FON EGASYS.FON EGAFIX.FON EGAOEM.FON; do
+            if mcopy -i "$IMAGE" "::/WINDOWS/SYSTEM/$name" "inspect/$name" 2>/dev/null; then
+              sha256sum "inspect/$name"
+            else
+              echo "Missing font $name"
+            fi
+          done
+          mcopy -i "$IMAGE" ::/WINDOWS/SYSTEM.INI inspect/SYSTEM.INI
+          mcopy -i "$IMAGE" ::/WINDOWS/WIN.INI inspect/WIN.INI
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ('SYSTEM.INI','WIN.INI'):
+            p=Path('inspect')/name
+            print('=== '+name+' ===')
+            s=p.read_text('latin-1', errors='replace')
+            group=''
+            for line in s.splitlines():
+              if line.startswith('['):group=line.lower()
+              if group in ('[boot]','[windows]') and (line.startswith('[') or any(q in line.lower() for q in ['display','font','border','menu','mouse','load=','run=','icon','shell','scroll'])):
+                print(line)
+          PY
