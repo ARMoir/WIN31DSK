@@ -67,16 +67,16 @@ def main():
     assert not a.output.exists()
     a.staging.mkdir(parents=True,exist_ok=False)
     shutil.copyfile(a.source,a.output)
-    old=read(a.output,"WINDOWS/WIN.INI",a.staging/"WIN.INI")
-    pan=read(a.output,"TANDY88/WINPAN.INI",a.staging/"WINPAN.INI")
+    old=read(a.output,"WINDOWS/WIN.INI",a.staging)
+    pan=read(a.output,"TANDY88/WINPAN.INI",a.staging)
     assert old==pan,"Current startup INI and PANON snapshot differ"
     fixed=modify(old)
     update=a.staging/"FIXED.INI"
     update.write_bytes(fixed)
     write(a.output,"WINDOWS/WIN.INI",update)
     write(a.output,"TANDY88/WINPAN.INI",update)
-    assert read(a.output,"WINDOWS/WIN.INI",a.staging/"VERIFY.INI")==fixed
-    assert read(a.output,"TANDY88/WINPAN.INI",a.staging/"VERIFY2.INI")==fixed
+    assert read(a.output,"WINDOWS/WIN.INI",a.staging)==fixed
+    assert read(a.output,"TANDY88/WINPAN.INI",a.staging)==fixed
     print("Startup fix, BorderWidth=2:",str(a.output),sha(a.output.read_bytes()))
 
 if __name__=="__main__":
