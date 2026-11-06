@@ -57,7 +57,7 @@ def trace_driver(original):
             raise ValueError(f"Unexpected failure jump at {address:04x}")
         expected[address] = old
         messages.append((position, msg))
-        position += len(msg) + 2  # DOS CR LF after message, dollar terminator already included
+        position += len(msg) + 2  # CR LF inserted before existing DOS dollar terminator
 
     for idx, (address, _, _) in enumerate(CHECKS):
         stub_addr = start + idx * stub_size
@@ -69,7 +69,7 @@ def trace_driver(original):
         binary.extend(stub)
 
     for _, msg in messages:
-        binary.extend(msg + b"\r\n")
+        binary.extend(msg[:-1] + b"\r\n$")
     if len(binary) > 2048:
         raise ValueError("Diagnostic cannot fit existing RESERVE.COM FAT cluster")
 
