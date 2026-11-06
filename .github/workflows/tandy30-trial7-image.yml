@@ -1,0 +1,101 @@
+name: Tandy EX TRIAL7 optimized 16-color CF image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-trial7-image.yml'
+      - 'tools/tandy30/trial7_candidate05_sector_patch.b64'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download immutable candidate05 base from existing GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p input output
+          gh release download tandy1000ex-win30-candidate05-16color-test-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img \
+            --dir input
+          echo '21a434e9e39073a4cbb40dab05114d447290fa7c220085af2253b6ebc671c4a7  input/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img' | sha256sum -c -
+
+      - name: Apply checksum-pinned sector delta and independently verify exact finished image
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, lzma, struct
+          root = Path('.')
+          src = root / 'input/TANDY1000EX_WIN30_CANDIDATE05_CF_31808S.img'
+          dest = root / 'output/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img'
+          patch = root / 'tools/tandy30/trial7_candidate05_sector_patch.b64'
+          compressed = base64.b64decode(''.join(patch.read_text('ascii').split()), validate=True)
+          assert hashlib.sha256(compressed).hexdigest() == '1232bc2d5a95625a1e5a72d527d73bc64b88005f605983642aaef98c47e84852'
+          raw = lzma.decompress(compressed)
+          count = struct.unpack_from('<I', raw)[0]
+          assert count == 408
+          assert len(raw) == 4 + 516 * count
+          data = bytearray(src.read_bytes())
+          assert len(data) == 16_285_696
+          prior = -1
+          for i in range(count):
+              at = 4 + 516 * i
+              sector = struct.unpack_from('<I', raw, at)[0]
+              assert prior < sector < 31_808, (i, sector)
+              prior = sector
+              offset = sector * 512
+              data[offset:offset+512] = raw[at+4:at+516]
+          assert data[510:512] == b'\\x55\\xaa'
+          assert data[32256+510:32256+512] == b'\\x55\\xaa'
+          assert hashlib.sha256(data).hexdigest() == '73129da6ca249120ee7bb1902b6da6b31eca40753dabe2fcc2a8220372574774'
+          dest.write_bytes(data)
+          assert len(dest.read_bytes()) == len(data)
+          print('PASS: exact previously verified TRIAL7 CF image restored from release + sector delta')
+          PY
+          cd output
+          sha256sum TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img > TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img.sha256
+          echo '73129da6ca249120ee7bb1902b6da6b31eca40753dabe2fcc2a8220372574774  TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img' | sha256sum -c -
+
+      - name: Upload complete bootable CF image to GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST
+          path: |
+            output/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img
+            output/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish durable separate GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-trial7-16color-performance-2026-11-06
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Already released; do not overwrite an existing image"
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img \
+            output/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'EXPERIMENTAL: Tandy 1000 EX TRIAL7 optimized 16-color Windows 3.0 CF image' \
+            --notes-file tools/tandy30/TRIAL7_HARDWARE_TEST.md \
+            --prerelease \
+            --latest=false
