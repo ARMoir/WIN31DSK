@@ -1,0 +1,128 @@
+name: Tandy EX panning desktop: visible Program Manager, border 2
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-pan-border2-startup.yml'
+      - 'tools/tandy30/pan_clean/startupfix.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FAT16 tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Retrieve checksum-pinned physical panning desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source output
+          gh release download tandy1000ex-win30-pan-16color-border1-clean-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img \
+            --dir source
+          echo '4f73b9c37a9d8b2dfbe12574a3cb7925c09f639e59945986a310c6aa81b22484  source/TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img' | sha256sum -c -
+
+      - name: Move PAN from run to load, border 2, viewport-sized Program Manager
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/pan_clean/startupfix.py \
+            --source source/TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img \
+            --output output/TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img \
+            --staging output/staging
+          (cd output && sha256sum TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img > TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img.sha256)
+
+      - name: Verify exact preservation of all games, groups, programs and rollback assets
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,struct,sys
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          a=Fat16(bytearray(Path('source/TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img').read_bytes()))
+          b=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img').read_bytes()))
+          assert len(b.b)==31808*512 and a.b[:a.part]==b.b[:b.part]
+          fatlen=struct.unpack_from('<H',b.b,b.part+22)[0]*512
+          assert b.b[b.fat:b.fat+fatlen]==b.b[b.fat+fatlen:b.fat+2*fatlen], 'FAT copies must match'
+          def files(fs):
+            found={}
+            def walk(prefix='',first=None):
+              for _,name,attrs,cluster,size in fs.entries(first):
+                if name in ('.','..'):continue
+                key=prefix+'/'+name
+                if attrs&16:walk(key,cluster)
+                else:found[key]=hashlib.sha256(fs.read(key)).hexdigest()
+            walk();return found
+          before,after=files(a),files(b)
+          assert set(before)==set(after),'No new or missing programs/files allowed'
+          changed={key for key in before if before[key]!=after[key]}
+          allowed={'/WINDOWS/WIN.INI','/TANDY88/WINPAN.INI',
+                   '/WINDOWS/PROGMAN.INI','/TANDY88/PRGPAN.INI'}
+          assert changed==allowed,(changed,allowed)
+          assert b.read('/WINDOWS/WIN.INI')==b.read('/TANDY88/WINPAN.INI')
+          assert b.read('/WINDOWS/PROGMAN.INI')==b.read('/TANDY88/PRGPAN.INI')
+          win=b.read('/WINDOWS/WIN.INI').lower()
+          assert b'borderwidth=2' in win
+          assert b'load=c:\\windows\\pan.exe' in win
+          assert b'run=\r\n' in win
+          pm=b.read('/WINDOWS/PROGMAN.INI')
+          assert b'Window=0 0 316 196 1' in pm
+          assert b'AutoArrange=1' in pm
+          for p in [b'MAIN.GRP',b'ACCESSOR.GRP',b'GAMES.GRP']:assert p in pm
+          for path in before:
+            if path.endswith('.GRP') or '/GAMES/' in path or '/WINGAME/' in path:
+              assert before[path]==after[path], path
+          for p in ['/WINDOWS/MAIN.GRP','/WINDOWS/ACCESSOR.GRP','/WINDOWS/GAMES.GRP',
+                    '/WINDOWS/PROGMAN.EXE','/WINDOWS/SYSTEM.INI',
+                    '/WINDOWS/SYSTEM/MSMOUSE1.DRV','/WINDOWS/SYSTEM/HPXY.DRV',
+                    '/WINDOWS/PAN.EXE','/WINDOWS/XYCTL.EXE',
+                    '/AUTOEXEC.BAT','/CONFIG.SYS','/WIN.BAT',
+                    '/PANOFF.BAT','/PANON.BAT','/TANDY88/WINBASE.INI','/TANDY88/PRGBASE.INI']:
+            assert a.read(p)==b.read(p),p
+          assert b'RESERVE.COM' in b.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in b.read('/WIN.BAT').upper()
+          print('PASS: 370+ original files and all original games/groups unchanged; exactly 4 INI changes')
+          print('PASS: load, run, BorderWidth=2, Program Manager first viewport, recovery snapshots, FAT mirrors and protected launcher')
+          PY
+
+      - name: Upload complete CF test image to GitHub Actions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_PAN16_Border2_ProgramManager_Visible
+          path: |
+            output/TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img
+            output/TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-pan-border2-progman-2026-11-06
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release exists. Refusing overwrite.'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img \
+            output/TANDY1000EX_WIN30_PAN16_BORDER2_PROGMAN.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'EXPERIMENTAL: Tandy Windows 3.0 16-color pan with visible 320x200 Program Manager, border 2' \
+            --notes 'Physical Tandy EX panning driver boot and Program Manager confirmed in preceding image. This separate test changes PAN.EXE startup from WIN.INI run= to load=, sets BorderWidth=2, and displays Program Manager as a 316x196 normal window within the 320x200 first viewport. The original Games, Main, Accessories, programs, all GRP files, mouse, fonts, DOS boot files and guarded launcher are unchanged. From DOS type WIN to test; Ctrl+Alt+arrows pans, Ctrl+Alt+Home returns. To revert from DOS run PANOFF then WIN. If PANON is selected, the corrected settings are restored. First-viewport layout still awaiting physical-machine verification.' \
+            --prerelease --latest=false
