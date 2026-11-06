@@ -1,0 +1,42 @@
+name: Inspect Tandy Windows 3.0 16-color display package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-16color.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download immutable upstream 16-color driver source package
+        run: |
+          mkdir -p staging
+          curl --fail --location --retry 3 --connect-timeout 15 --max-time 120 \
+            "https://raw.githubusercontent.com/astrobleem/oemdisplay-tandy/4fe890a951d93826e9ced6dbb98934ef6e0dccd0/downloads/experimental/FIXED/WINXT720.ZIP" \
+            -o staging/WINXT720.ZIP
+          test "$(git hash-object staging/WINXT720.ZIP)" = fc7054b1d2a2acf5ce143858b005dfe5365b9bda
+          unzip -l staging/WINXT720.ZIP
+          unzip -o -d staging/package staging/WINXT720.ZIP
+          find staging/package -maxdepth 3 -type f -printf '%p %s bytes\n'
+      - name: Extract FAT12 files from Tandy driver support floppy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mtools
+          find staging/package -type f -iname '*.img' -print | while read -r img; do
+            mdir -i "$img" :: || true
+            mkdir -p staging/extracted
+            mcopy -s -n -i "$img" ::/* staging/extracted/ || true
+          done
+          find staging/extracted -type f -printf '%P %s bytes\n' | sort
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TANDY_16COLOR_SOURCE_INSPECTION
+          path: staging/
+          retention-days: 7
