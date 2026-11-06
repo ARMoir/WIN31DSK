@@ -1,0 +1,139 @@
+name: Tandy EX three stacked one-row Program Manager groups
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-three-groups.yml'
+      - 'tools/tandy30/pan_clean/stack_groups.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install DOS FAT16 tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Fetch exact previous hardware-tested border-2 panning image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source output
+          gh release download tandy1000ex-win30-pan-border2-progman-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_PAN_16COLOR_BORDER2_PROGMAN_VISIBLE_CF.img \
+            --dir source
+          echo 'd8d0a38c3bab6f5df1b1f94c90efbb9b34beb2e35b5b4c6e25e53a3ff9102328  source/TANDY1000EX_WIN30_PAN_16COLOR_BORDER2_PROGMAN_VISIBLE_CF.img' | sha256sum -c -
+
+      - name: Stack Main, Accessories and Games and recompute Program Manager checksums
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/pan_clean/stack_groups.py \
+            --source source/TANDY1000EX_WIN30_PAN_16COLOR_BORDER2_PROGMAN_VISIBLE_CF.img \
+            --output output/TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img \
+            --staging output/staging
+          (cd output && sha256sum TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img > TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img.sha256)
+
+      - name: Verify exact original file inventory and no modifications outside group layout
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys, hashlib, struct, importlib.util
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          spec=importlib.util.spec_from_file_location('groups','tools/tandy30/pan_clean/stack_groups.py')
+          mod=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          a=Fat16(bytearray(Path('source/TANDY1000EX_WIN30_PAN_16COLOR_BORDER2_PROGMAN_VISIBLE_CF.img').read_bytes()))
+          b=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img').read_bytes()))
+          assert len(a.b)==len(b.b)==31808*512
+          assert a.b[:a.part]==b.b[:b.part], 'MBR/partition identity changed'
+          fatsz=struct.unpack_from('<H',b.b,b.part+22)[0]*512
+          assert b.b[b.fat:b.fat+fatsz]==b.b[b.fat+fatsz:b.fat+2*fatsz], 'FAT mirrors differ'
+          def inventory(fs):
+            out={}
+            def walk(prefix='',start=None):
+              for _,name,attr,cluster,size in fs.entries(start):
+                if name in ('.','..'):continue
+                path=prefix+'/'+name
+                if attr&16:walk(path,cluster)
+                else:out[path]=hashlib.sha256(fs.read(path)).hexdigest()
+            walk();return out
+          old,new=inventory(a),inventory(b)
+          assert set(old)==set(new),('Missing or added file',set(old)^set(new))
+          expected={'/WINDOWS/PROGMAN.INI','/TANDY88/PRGPAN.INI',
+                    '/WINDOWS/MAIN.GRP','/WINDOWS/ACCESSOR.GRP','/WINDOWS/GAMES.GRP'}
+          actual={name for name in old if old[name]!=new[name]}
+          assert actual==expected, (actual,expected)
+          assert b.read('/WINDOWS/PROGMAN.INI')==b.read('/TANDY88/PRGPAN.INI')
+          pm=b.read('/WINDOWS/PROGMAN.INI')
+          for key in (b'Group1=C:\\WINDOWS\\MAIN.GRP',b'Group2=C:\\WINDOWS\\ACCESSOR.GRP',
+                      b'Group3=C:\\WINDOWS\\GAMES.GRP',b'AutoArrange=0',
+                      b'SaveSettings=0',b'Window=0 0 316 196 1'):
+            assert key in pm,key
+          for gn in ('MAIN','ACCESSOR','GAMES'):
+            original=a.read('/WINDOWS/'+gn+'.GRP')
+            newgroup=b.read('/WINDOWS/'+gn+'.GRP')
+            assert mod.checksum_ok(newgroup)
+            assert mod.rearrange(original,gn)==newgroup
+            slots,names=mod.item_specs(newgroup)
+            assert len(names)=={'MAIN':6,'ACCESSOR':10,'GAMES':11}[gn],gn
+            assert struct.unpack_from('<H',newgroup,8)[0]==1
+            assert struct.unpack_from('<hhhh',newgroup,10)==mod.RECTS[gn]
+            assert all(struct.unpack_from('<h',newgroup,o+2)[0]==0 for _,_,_,o in slots)
+          for name in old:
+            if name.endswith('.GRP') and name not in expected:assert old[name]==new[name]
+            if '/GAMES/' in name or '/WINGAME/' in name:assert old[name]==new[name]
+          win=b.read('/WINDOWS/WIN.INI').lower()
+          assert b'borderwidth=2' in win
+          assert b'load=c:\\windows\\pan.exe' in win and b'run=\r\n' in win
+          sysini=b.read('/WINDOWS/SYSTEM.INI').upper()
+          assert b'DISPLAY.DRV=HPXY.DRV' in sysini
+          assert b'MOUSE.DRV=MSMOUSE1.DRV' in sysini
+          assert b'RESERVE.COM' in b.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in b.read('/WIN.BAT').upper()
+          print('PASS: exact group names/commands/bitmap bytes & PMCC checksums')
+          print('PASS: all 6 Main, 10 Accessories, and 11 Games icons preserved as three one-row open group windows')
+          print('PASS: no changes to any executable, mouse, driver, panning, fonts, DOS files, rollback, or other game data')
+          print('PASS: original disk size, mirror FATs and file inventory',len(old),'files')
+          PY
+
+      - name: Upload bootable CF test image to Actions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_PAN16_Border2_Three_One_Row_Groups
+          path: |
+            output/TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img
+            output/TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate immutable GitHub test release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-pan-border2-three-groups-2026-11-06
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Existing test release retained unchanged'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img \
+            output/TANDY1000EX_WIN30_PAN16_BORDER2_THREE_ROW_GROUPS_CF.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'Tandy EX Windows 3.0: Main / Accessories / Games stacked in three rows, pan 16-color, border 2' \
+            --notes 'New experimental physical Tandy 1000 EX CF image. Existing 640x256 logical panning desktop, 320x200 viewport, 16 colors, BorderWidth=2. Program Manager visible first. Main at top, Accessories middle, Games bottom, all open one icon row high. Icons extending beyond the group viewport remain accessible by horizontal scrolling. All 27 group icons, commands, icon resources, original applications, Games executables, DOS files, video reservation, serial mouse, other groups and rollback scripts preserved. Original Win3 group PMCC checksums recomputed and validated. Not yet tested on physical hardware. From DOS type WIN; PANOFF then WIN returns to previous RRECT settings.' \
+            --prerelease --latest=false
