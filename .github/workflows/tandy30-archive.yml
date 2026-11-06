@@ -1,0 +1,77 @@
+name: Preserve hardware-verified Tandy 1000 EX CF image in GitHub Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-archive.yml'
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  archive-exact-working-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout preservation documentation
+        uses: actions/checkout@v4
+
+      - name: Download the EXACT real-hardware-verified image from successful run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release
+          gh run download 42133405035 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S \
+            --dir release
+
+      - name: Verify immutable identity, original driver, DOS boot and no Windows autorun
+        run: |
+          cd release
+          test "$(stat -c%s TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img)" -eq 16285696
+          sha256sum -c TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img.sha256
+          echo "eca08b0eb4283854bfef71d98d8febe08ad8de89eb3d52a109a0b9d39993fa34  TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img" | sha256sum -c -
+          cd ..
+          python3 - <<'PY'
+          import hashlib, re, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          b = bytearray(Path('release/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img').read_bytes())
+          disk = Fat16(b)
+          auto = disk.read('/AUTOEXEC.BAT').upper()
+          ini = disk.read('/WINDOWS/SYSTEM.INI').upper()
+          drv = disk.read('/WINDOWS/SYSTEM/MSMOUSE1.DRV')
+          assert hashlib.sha256(drv).hexdigest() == '99b3578809422728d64ad4cdbe17361cdde400840167c8d90c7499842c2812b8'
+          assert b'C:\\CTMOUSE.EXE /S14 /M' in auto
+          assert b'C:\\WINDOWS' in auto
+          assert re.search(rb'(?im)^MOUSE.DRV=MSMOUSE1.DRV\s*$', ini)
+          assert re.search(rb'(?im)^DISPLAY.DRV=TANDYDSP.DRV\s*$', ini)
+          assert not any(x.strip().startswith((b'WIN', b'CALL WIN')) for x in auto.splitlines())
+          print('VERIFIED: original Windows 1.04 COM1 driver; CuteMouse DOS startup; Tandy display; manual WIN only')
+          PY
+
+      - name: Publish permanent GitHub Release without changing archived files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-mouse-verified-2026-11-05
+          SOURCE_SHA: 121ae1d8d8a64a6b02b9ffcbc77065813af5f8e5
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Verified release already exists. Refusing to overwrite its assets."
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            release/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img \
+            release/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --title "Tandy 1000 EX - Windows 3.0 serial mouse (real hardware verified)" \
+            --notes-file tools/tandy30/VERIFIED_RELEASE.md \
+            --latest=false
+          echo "Permanent release: https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
