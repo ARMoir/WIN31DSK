@@ -1,5 +1,58 @@
 # Tandy 1000 EX, Windows 3.0, 320x200 16 colors: OEM Setup control test
 
+## Physical hardware result: OEM installation did NOT fix Windows startup
+
+On the actual Tandy 1000 EX, Windows 3.0 Setup successfully displayed the
+OEM choice **Tandy EX/HX 320x200 16 colors** and the owner installed it.
+Launching Windows then displayed the custom **Windows XT splash screen**
+instead of the original blue startup screen, but **Windows exited/crashed
+back to C:\\> without reaching the GUI**.
+
+**Do not call this a successful graphical Windows boot, functioning 16-color
+desktop, or working display driver.** The owner clarified that the original
+blue screen was also startup artwork. The new image only proves that new
+startup artwork can be displayed and the selected OEM installation was
+accepted by Setup. The underlying startup failure remains.
+
+### Next controlled A/B test on the existing experimental CF, no reflash
+
+We have not yet established whether the original `TANDYDSP.DRV` still
+starts Windows using the experimental plain-DOS configuration and guarded
+video reservation. First back up the current experimental `SYSTEM.INI`,
+then temporarily restore the original `SYSTEM.INI` already saved on the
+card. **Do not use `C:\\WINXT\\RESTORE` for this comparison**, because
+that also restores DOSMAX and would change two variables simultaneously.
+
+From DOS:
+
+```dos
+COPY C:\WINDOWS\SYSTEM.INI C:\WINXT\XTTEST.INI
+COPY C:\WINXT\SYSOLD.INI C:\WINDOWS\SYSTEM.INI
+CD \
+WIN
+```
+
+The original `SYSOLD.INI` selects `TANDYDSP.DRV` and the original
+verified Windows 1.04 `MSMOUSE1.DRV`. The same plain DOS CONFIG,
+CuteMouse, guarded manual WIN and reserved video memory remain active.
+
+- If the stock four-color Windows desktop works, suspect the new
+  16-color OEM display installation (including driver/support files).
+- If it still exits back to DOS, investigate the experimental DOS memory
+  layout, reservation/launcher and other differences from the verified
+  release before blaming the 16-color display driver.
+
+After testing, restore the experimental driver selection:
+
+```dos
+COPY C:\WINXT\XTTEST.INI C:\WINDOWS\SYSTEM.INI
+```
+
+Reboot after a hang. The known-good archived mouse-enabled release is
+untouched. Windows starts only when the owner manually types `WIN`.
+
+---
+
 ## Important: Windows 3.0 Setup maintenance mode fix (November 6, 2026)
 
 The original experimental Release's `SETUP16.BAT` ran
