@@ -1,3 +1,21 @@
+## VERIFIED ON REAL TANDY 1000 EX: DOS + Windows 3.0 mouse (November 5, 2026)
+
+**Working build:** [GitHub Actions run #42133405035](https://github.com/ARMoir/WIN31DSK/actions/runs/42133405035), artifact `TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S`.
+
+The user reports that the **Windows 1.04 Mouse Systems COM1 driver image works on the physical Tandy 1000 EX**, after the Windows 3.0 original/modified drivers caused startup crashes. This is the **known-good build to preserve**. Do not replace its Windows mouse driver with the newer Windows 3.0 `MSMOUSE1.DRV` or patched `MOUSE.DRV` without explicit new testing.
+
+- Target: Tandy 1000 EX, NEC V20, Tandy EX/HX 3-in-1 serial COM1 IRQ4, Dexxa M-DX800S serial mouse.
+- DOS mouse: `C:\CTMOUSE.EXE /S14 /M` loaded automatically; `MTEST` confirms DOS operation.
+- Windows: Windows **3.0** using **Windows 1.04** `MSMOUSE1.DRV` (1,966 bytes), original SHA-256 `99b3578809422728d64ad4cdbe17361cdde400840167c8d90c7499842c2812b8`.
+- Image: `TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img`, 31,808 sectors (16,285,696 bytes), SHA-256 `eca08b0eb4283854bfef71d98d8febe08ad8de89eb3d52a109a0b9d39993fa34`.
+- Preserves `TANDYDSP.DRV` and DOS `PATH` including `C:\WINDOWS`.
+- **Boots to DOS. Windows starts ONLY when user types `WIN`. No Windows autorun.**
+- The reproducible source archive and workflow are committed on branch `TANDY30`. GitHub Actions artifacts expire; regenerate from the preserved workflow if needed.
+
+Previous experiments with Windows 3.0 `MSMOUSE1.DRV`, stock `MOUSE.DRV`, and the INT33 patched mouse drivers all crashed on startup. Do not use them as the default build.
+
+---
+
 # Tandy 1000 EX Windows 3.0 mouse build
 
 The [TANDY30 GitHub Actions workflow](../../.github/workflows/tandy30-mouse.yml) builds a separate image sized exactly for a 31,808-sector (16,285,696-byte) CF card from the unchanged `builds/TANDY1000EX_WIN30_NOGAMES_16MB.img` baseline.
