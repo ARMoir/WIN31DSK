@@ -1,0 +1,147 @@
+name: Tandy EX 16-color panning desktop with tidy preserved Games groups
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-pan-clean.yml'
+      - 'tools/tandy30/pan_clean/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mtools for FAT16 write and readback
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Download exact working RRECT CF image and pinned upstream panning kit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source output
+          gh release download tandy1000ex-win30-rrect-16color-test-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img \
+            --dir source
+          echo 'bedf5aa14c6259ad526074ce2412528a91f170feda9b3798befb78e8746f5e8b  source/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img' | sha256sum -c -
+          curl -fLsS --retry 3 -o source/WINXT.ZIP \
+            https://github.com/astrobleem/oemdisplay-tandy/releases/download/windows-xt/WINXT.ZIP
+          echo '35266732e122068d03c44c98a610621d65c06c38c29b8ca3d1d0513a94d30fca  source/WINXT.ZIP' | sha256sum -c -
+          unzip -Z1 source/WINXT.ZIP | grep -Ei 'HPXY|PAN|XTC(SYS|FIX|OEM)' | tee source/PAN_INVENTORY.TXT
+
+      - name: Prepare 640x256 logical viewport and clean groups preserving all originals
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/pan_clean/prepare.py \
+            --image source/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img \
+            --packet source/WINXT.ZIP \
+            --out output/TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img \
+            --stage output/staging
+          (cd output && sha256sum TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img > TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img.sha256)
+
+      - name: Verify FAT mirrors and every existing program, game and group byte-for-byte
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys,hashlib,struct
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          old=Fat16(bytearray(Path('source/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img').read_bytes()))
+          new=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img').read_bytes()))
+          assert new.b[:old.part] == old.b[:old.part], 'MBR/boot partition changed'
+          fatsize=struct.unpack_from('<H',new.b,new.part+22)[0]*512
+          assert new.b[new.fat:new.fat+fatsize]==new.b[new.fat+fatsize:new.fat+2*fatsize], 'FAT mirrors differ'
+          def inventory(fs):
+              result={}
+              def walk(parent='',first=None):
+                  for _,name,flags,cluster,size in fs.entries(first):
+                      if name in ('.','..'):continue
+                      p=parent+'/'+name
+                      if flags&16:walk(p,cluster)
+                      else:result[p]=hashlib.sha256(fs.read(p)).hexdigest()
+              walk()
+              return result
+          src=inventory(old);dst=inventory(new)
+          missing=set(src)-set(dst)
+          assert not missing, 'Deleted original files: '+str(missing)
+          changed={k for k in src if src[k]!=dst[k]}
+          assert changed=={'/WINDOWS/SYSTEM.INI','/WINDOWS/WIN.INI','/WINDOWS/PROGMAN.INI'}, changed
+          groups=('/WINDOWS/MAIN.GRP','/WINDOWS/ACCESSOR.GRP','/WINDOWS/GAMES.GRP')
+          for g in groups:
+              assert old.read(g)==new.read(g) and new.read(g)[:4]==b'PMCC'
+          for path in src:
+              if path.endswith('.GRP') or '/GAMES/' in path or '/WINGAME/' in path:
+                  assert src[path]==dst[path], path
+          settings=new.read('/WINDOWS/SYSTEM.INI').upper()
+          assert b'DISPLAY.DRV=HPXY.DRV' in settings
+          assert b'MOUSE.DRV=MSMOUSE1.DRV' in settings
+          assert b'FONTS.FON=XTCSYS.FON' in settings
+          assert b'FIXEDFON.FON=XTCFIX.FON' in settings
+          assert b'OEMFONTS.FON=XTCOEM.FON' in settings
+          wini=new.read('/WINDOWS/WIN.INI').upper()
+          assert b'BORDERWIDTH=1' in wini
+          assert b'RUN=C:\\WINDOWS\\PAN.EXE' in wini
+          prog=new.read('/WINDOWS/PROGMAN.INI').upper()
+          for p in (b'MAIN.GRP',b'ACCESSOR.GRP',b'GAMES.GRP',b'AUTOARRANGE=1'):
+              assert p in prog,p
+          assert new.read('/TANDY88/SYSBASE.INI')==old.read('/WINDOWS/SYSTEM.INI')
+          assert new.read('/TANDY88/WINBASE.INI')==old.read('/WINDOWS/WIN.INI')
+          assert new.read('/TANDY88/PRGBASE.INI')==old.read('/WINDOWS/PROGMAN.INI')
+          assert new.read('/TANDY88/SYSPAN.INI')==new.read('/WINDOWS/SYSTEM.INI')
+          assert new.read('/TANDY88/WINPAN.INI')==new.read('/WINDOWS/WIN.INI')
+          assert new.read('/TANDY88/PRGPAN.INI')==new.read('/WINDOWS/PROGMAN.INI')
+          for path in ('/WINDOWS/SYSTEM/HPXY.DRV','/WINDOWS/PAN.EXE','/WINDOWS/XYCTL.EXE','/WINDOWS/PANKEY.DLL'):
+              b=new.read(path)
+              assert b[:2]==b'MZ' and len(b)>1000,(path,len(b))
+          for critical in ('/AUTOEXEC.BAT','/CONFIG.SYS','/WIN.BAT','/CTMOUSE.EXE',
+                 '/WINDOWS/SYSTEM/MSMOUSE1.DRV','/WINDOWS/SYSTEM/RR8.DRV',
+                 '/WINDOWS/SYSTEM/TR73216.DRV','/WINDOWS/SYSTEM/TR53216.DRV',
+                 '/WINDOWS/PROGMAN.EXE','/WINDOWS/CALC.EXE'):
+              assert old.read(critical)==new.read(critical),critical
+          assert b'RESERVE.COM' in new.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in new.read('/WIN.BAT').upper()
+          assert len(new.b)==31808*512
+          print('PASS: physical CF size, mirrored FAT, complete old-file inventory ('+str(len(src))+'), all three GRP files and Games unchanged')
+          print('PASS: original serial mouse, keyboard, fonts, system files, protected video boot and all older driver binaries unchanged')
+          print('PASS: intended HPXY/PAN driver and compact INI selection and exact DOS rollback snapshots')
+          PY
+
+      - name: Upload standalone finished CF image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN
+          path: |
+            output/TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img
+            output/TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish durable separate GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-pan-16color-border1-clean-2026-11-06
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+             echo 'Release already exists: not overwriting'
+             exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img \
+            output/TANDY1000EX_WIN30_PAN_16COLOR_BORDER1_CLEAN.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'EXPERIMENTAL: Tandy EX Windows 3.0 16-color pannable clean desktop, BorderWidth=1, Games preserved' \
+            --notes-file tools/tandy30/pan_clean/README.md \
+            --prerelease --latest=false
