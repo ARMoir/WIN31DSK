@@ -1,0 +1,230 @@
+name: Tandy EX compact Windows chrome 320x200 16-color experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-compact320.yml'
+      - 'tools/tandy30/compact320/COMPACTBUILD.PY'
+
+permissions:
+  contents: write
+
+jobs:
+  compact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install DOSBox-X and FAT16 tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dosbox-x mtools
+
+      - name: Obtain pinned upstream sources and archived toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init main-src
+          git -C main-src remote add origin https://github.com/astrobleem/oemdisplay-tandy.git
+          git -C main-src fetch --no-tags --depth=1 origin 4fe890a951d93826e9ced6dbb98934ef6e0dccd0
+          git -C main-src checkout --detach FETCH_HEAD
+          test "$(git -C main-src rev-parse HEAD)" = 4fe890a951d93826e9ced6dbb98934ef6e0dccd0
+          git init tr5-src
+          git -C tr5-src remote add origin https://github.com/astrobleem/oemdisplay-tandy.git
+          git -C tr5-src fetch --no-tags --depth=1 origin 1eac04fdc571f73037b502ecf1f085028271866e
+          git -C tr5-src checkout --detach FETCH_HEAD
+          test "$(git -C tr5-src rev-parse HEAD)" = 1eac04fdc571f73037b502ecf1f085028271866e
+          python3 main-src/tools/BUILDDEPS/DEPS.PY fetch --lock main-src/tools/BUILDDEPS/LOCK.JSON --out dep-git
+          python3 main-src/tools/BUILDDEPS/DEPS.PY materialize --lock main-src/tools/BUILDDEPS/LOCK.JSON --repo dep-git --out deps
+          python3 main-src/tools/BUILDDEPS/DEPS.PY verify --lock main-src/tools/BUILDDEPS/LOCK.JSON --deps deps
+          python3 main-src/tools/BUILDDEPS/DEPS.PY view --lock main-src/tools/BUILDDEPS/LOCK.JSON --deps deps --source-repo tr5-src --source-commit 1eac04fdc571f73037b502ecf1f085028271866e --profile display --out view
+          cp main-src/src/tandysw/COMPACT.PY view/src/tandysw/COMPACT.PY
+          cp main-src/src/rrect/RRPATCH.PY view/src/tandysw/RRPATCH.PY
+
+      - name: Account explicitly for the changed compact OEM resources
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('view/src/tandysw/BUILD88.PY')
+          s=p.read_bytes()
+          old=b'if args.mode == "320x200x16":\n        assert resource_sha == baseline.RESOURCE_SHA'
+          new=b'if args.mode == "320x200x16" and os.environ.get("TANDY_UI_PROFILE") != "compact320":\n        assert resource_sha == baseline.RESOURCE_SHA'
+          assert s.count(old)==1
+          p.write_bytes(s.replace(old,new))
+          print('Noncompact resource pin retained; compact resource hash recorded independently in RESULT.json')
+          PY
+
+      - name: Build RRECT with opt-in compact caption and scrollbars
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/compact320/COMPACTBUILD.PY view /usr/bin/dosbox-x build-compact
+          test -s build-compact/TANDY88.DRV
+          mkdir -p output staging
+          cp build-compact/TANDY88.DRV staging/CMP32.DRV
+          cp build-compact/COMPACT_RESULT.json output/
+          cp build-compact/RESULT.json output/COMPACT_BUILD88_RESULT.json
+          sha256sum staging/CMP32.DRV | tee output/CMP32.DRV.sha256
+
+      - name: Fetch byte-exact physically-tried RRECT image and install compact alternative
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download tandy1000ex-win30-rrect-16color-test-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" --pattern TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img --dir output
+          echo 'bedf5aa14c6259ad526074ce2412528a91f170feda9b3798befb78e8746f5e8b  output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img' | sha256sum -c -
+          cp output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img output/TANDY1000EX_WIN30_COMPACT320_16COLOR_TEST.img
+          IMG='output/TANDY1000EX_WIN30_COMPACT320_16COLOR_TEST.img@@32256'
+          for i in CGASYS.FON CGAFIX.FON CGAOEM.FON; do
+            mcopy -i "$IMG" "::/WINDOWS/SYSTEM/$i" "staging/$i"
+            test -s "staging/$i"
+          done
+          echo 'baf8fa607806d949dfb6992113ce93494678abdef07783b22222b62e5de28ef4  staging/CGASYS.FON' | sha256sum -c -
+          echo 'b0c043a65e2b551bce3c77d25921394dfd2533f50633bc129abd240c7aeb5f89  staging/CGAFIX.FON' | sha256sum -c -
+          echo '1a86d9e42c73ccefcbc82c822abe8dbcd61cf0116454f213c3a95f4d7436cd0d  staging/CGAOEM.FON' | sha256sum -c -
+          mcopy -i "$IMG" ::/WINDOWS/SYSTEM.INI staging/SYSC0.INI
+          mcopy -i "$IMG" ::/WINDOWS/WIN.INI staging/WINC0.INI
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          sysbase=Path('staging/SYSC0.INI').read_bytes()
+          winbase=Path('staging/WINC0.INI').read_bytes()
+          rules=[
+             (rb'(?im)^(display\.drv\s*=\s*)RR8\.DRV(?=\r?$)',b'CMP32.DRV'),
+             (rb'(?im)^(fonts\.fon\s*=\s*)EGASYS\.FON(?=\r?$)',b'CGASYS.FON'),
+             (rb'(?im)^(fixedfon\.fon\s*=\s*)EGAFIX\.FON(?=\r?$)',b'CGAFIX.FON'),
+             (rb'(?im)^(oemfonts\.fon\s*=\s*)EGAOEM\.FON(?=\r?$)',b'CGAOEM.FON')
+          ]
+          updated=sysbase
+          for pattern,replacement in rules:
+            updated,n=re.subn(pattern,lambda m:m.group(1)+replacement,updated)
+            if n!=1:raise SystemExit(f'Unexpected SYSTEM.INI source: {pattern}: {n}')
+          updated2,n=re.subn(rb'(?im)^(BorderWidth\s*=\s*)4(?=\r?$)',lambda m:m.group(1)+b'1',winbase)
+          if n!=1:raise SystemExit('Expected one existing BorderWidth=4')
+          Path('staging/SYSCP.INI').write_bytes(updated)
+          Path('staging/WINCP.INI').write_bytes(updated2)
+          files={
+           'CMPON.BAT': (
+             '@ECHO OFF','ECHO Switching to compact 16-color interface...',
+             'COPY C:\\TANDY88\\SYSCP.INI C:\\WINDOWS\\SYSTEM.INI',
+             'IF ERRORLEVEL 1 GOTO FAIL',
+             'COPY C:\\TANDY88\\WINCP.INI C:\\WINDOWS\\WIN.INI',
+             'IF ERRORLEVEL 1 GOTO FAIL',
+             'ECHO Compact driver selected. Type WIN.',
+             'GOTO END',':FAIL','ECHO Selection failed. Restore using CMPOFF.',':END'),
+           'CMPOFF.BAT': (
+             '@ECHO OFF','ECHO Restoring pretest RRECT interface...',
+             'COPY C:\\TANDY88\\SYSC0.INI C:\\WINDOWS\\SYSTEM.INI',
+             'IF ERRORLEVEL 1 GOTO FAIL',
+             'COPY C:\\TANDY88\\WINC0.INI C:\\WINDOWS\\WIN.INI',
+             'IF ERRORLEVEL 1 GOTO FAIL',
+             'ECHO Original RRECT settings restored. Type WIN.',
+             'GOTO END',':FAIL','ECHO Restore failed: inspect INI files. Do not launch WIN.',':END')
+          }
+          for name,lines in files.items():
+            Path('staging/'+name).write_bytes(('\r\n'.join(lines)+'\r\n').encode('ascii'))
+          PY
+          for f in CMP32.DRV; do
+            mcopy -o -i "$IMG" "staging/$f" "::/WINDOWS/SYSTEM/$f"
+          done
+          for f in SYSCP.INI WINCP.INI SYSC0.INI WINC0.INI; do
+            mcopy -o -i "$IMG" "staging/$f" "::/TANDY88/$f"
+          done
+          for f in CMPON.BAT CMPOFF.BAT; do
+            mcopy -o -i "$IMG" "staging/$f" "::$f"
+          done
+          mcopy -o -i "$IMG" staging/SYSCP.INI ::/WINDOWS/SYSTEM.INI
+          mcopy -o -i "$IMG" staging/WINCP.INI ::/WINDOWS/WIN.INI
+
+      - name: Verify exact old-file retention, font switching, mouse, protected boot and FAT copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct,hashlib,sys,json
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          old=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img').read_bytes()))
+          new=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_COMPACT320_16COLOR_TEST.img').read_bytes()))
+          assert old.b[:old.part]==new.b[:new.part]
+          fatlen=struct.unpack_from('<H',new.b,new.part+22)[0]*512
+          assert new.b[new.fat:new.fat+fatlen]==new.b[new.fat+fatlen:new.fat+fatlen*2]
+          def inventory(fs):
+            d={}
+            def walk(path='',cluster=None):
+              for _,name,attr,first,size in fs.entries(cluster):
+                if name in ('.','..'):continue
+                key=path+'/'+name
+                if attr&16:walk(key,first)
+                else:d[key]=hashlib.sha256(fs.read(key)).hexdigest()
+            walk()
+            return d
+          a=inventory(old);b=inventory(new)
+          assert not (set(a)-set(b))
+          assert {name for name in a if a[name]!=b[name]}=={'/WINDOWS/SYSTEM.INI','/WINDOWS/WIN.INI'}
+          expected={'/WINDOWS/SYSTEM/CMP32.DRV','/TANDY88/SYSCP.INI','/TANDY88/WINCP.INI',
+                    '/TANDY88/SYSC0.INI','/TANDY88/WINC0.INI','/CMPON.BAT','/CMPOFF.BAT'}
+          assert set(b)-set(a)==expected,(set(b)-set(a),expected)
+          newdrv=new.read('/WINDOWS/SYSTEM/CMP32.DRV')
+          assert newdrv==Path('staging/CMP32.DRV').read_bytes()
+          assert hashlib.sha256(newdrv).hexdigest()==json.loads(Path('output/COMPACT_RESULT.json').read_text())['sha256']
+          assert new.read('/TANDY88/SYSC0.INI')==old.read('/WINDOWS/SYSTEM.INI')
+          assert new.read('/TANDY88/WINC0.INI')==old.read('/WINDOWS/WIN.INI')
+          assert new.read('/WINDOWS/SYSTEM.INI')==new.read('/TANDY88/SYSCP.INI')
+          assert new.read('/WINDOWS/WIN.INI')==new.read('/TANDY88/WINCP.INI')
+          s=new.read('/WINDOWS/SYSTEM.INI').lower()
+          for val in [b'display.drv=cmp32.drv',b'fonts.fon=cgasys.fon',
+                      b'fixedfon.fon=cgafix.fon',b'oemfonts.fon=cgaoem.fon',
+                      b'mouse.drv=msmouse1.drv']:
+            assert val in s,val
+          assert b'borderwidth=1' in new.read('/WINDOWS/WIN.INI').lower()
+          for k in ['/CONFIG.SYS','/AUTOEXEC.BAT','/CTMOUSE.EXE','/WIN.BAT',
+                    '/WINDOWS/CALC.EXE','/WINDOWS/SYSTEM/MSMOUSE1.DRV',
+                    '/WINDOWS/SYSTEM/RR8.DRV','/WINDOWS/SYSTEM/TR73216.DRV',
+                    '/WINDOWS/SYSTEM/TR53216.DRV','/WINDOWS/SYSTEM/TANDY88.DRV',
+                    '/WINDOWS/SYSTEM/EGASYS.FON','/WINDOWS/SYSTEM/CGASYS.FON',
+                    '/REST7.BAT','/USER8.BAT']:
+            assert new.read(k)==old.read(k),k
+          assert b'RESERVE.COM' in new.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in new.read('/WIN.BAT').upper()
+          assert len(new.b)==31808*512
+          print('PASS static CF test, seven additions, two intended INI changes, no other changes')
+          PY
+          (cd output && sha256sum TANDY1000EX_WIN30_COMPACT320_16COLOR_TEST.img > TANDY1000EX_WIN30_COMPACT320_16COLOR_TEST.img.sha256)
+
+      - name: Upload separate compact Windows test image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_Compact320_16color_Cf_Test
+          path: |
+            output/TANDY1000EX_WIN30_COMPACT320_16COLOR_TEST.img
+            output/TANDY1000EX_WIN30_COMPACT320_16COLOR_TEST.img.sha256
+            output/COMPACT_RESULT.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate prerelease, never overwrite working TRIAL7 or RRECT
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-compact320-ui-test-2026-11-06
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Existing compact image untouched'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_COMPACT320_16COLOR_TEST.img \
+            output/TANDY1000EX_WIN30_COMPACT320_16COLOR_TEST.img.sha256 \
+            output/COMPACT_RESULT.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'EXPERIMENTAL: Tandy EX compact title bars and controls in Windows 3.0 320x200x16' \
+            --notes 'Unverified on physical Tandy. Separate 31,808-sector CF image built from RRECT with extra compact320 OEM graphics resources, original stock CGA 8-pixel system fonts, BorderWidth=1. Windows Setup not required. From DOS type WIN. For rollback close/reboot Windows then run CMPOFF followed by WIN. Keep original RRECT and TRIAL7 images. Native video remains physically 320x200x16. No proven general fix for nonresizable apps or larger hardware resolution.' \
+            --prerelease --latest=false
