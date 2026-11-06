@@ -96,7 +96,9 @@ jobs:
           ECHO Keep your current mouse driver. Do not alter DOS startup.
           ECHO If prompted, select No Changes to CONFIG.SYS/AUTOEXEC.BAT.
           PAUSE
-          C:\\WINDOWS\\SETUP.EXE
+          C:
+          CD \\WINDOWS
+          SETUP.EXE
           '''
           root.joinpath('SETUP16.BAT').write_bytes(setup.replace('\n','\r\n').encode('cp437'))
           PY
