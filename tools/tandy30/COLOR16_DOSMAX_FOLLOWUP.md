@@ -81,3 +81,60 @@ The upstream video utility requires conventional memory ending at 9C00h:
 https://github.com/astrobleem/oemdisplay-tandy/blob/main/src/tandysw/RESERVE.MD
 and its implementation:
 https://github.com/astrobleem/oemdisplay-tandy/blob/main/src/tandysw/RESERVE.ASM
+
+## Real hardware result on second 16-color image (plain DOS)
+
+A photograph from the physical Tandy EX, using the plain-DOS image, shows:
+
+```text
+RESERVE: need Tandy, text mode 3, BIOS 624K and DOS 3+. No reservation.
+16-color video memory reservation failed. Windows was NOT started.
+```
+
+**Important change in failure:** the original DOSMAX image passed the initial
+platform gate and stopped later with `unsupported or corrupt DOS arena`.
+The plain-DOS image instead fails the **initial platform gate**. Therefore,
+one or more of the hardware/DOS preconditions observed by RESERVE.COM
+differed after changing CONFIG.SYS. Plausible causes include BIOS reported
+conventional-memory size, but the photo does not isolate the failing check.
+Do not force the BIOS memory word to 624K or bypass the guard without
+checking the physical memory map.
+
+### Read-only diagnostic to locate the exact failure
+
+**[Download TANDYCHK.COM](https://github.com/ARMoir/WIN31DSK/releases/download/tandy1000ex-win30-16color-memory-diagnostic-2026-11-05/TANDYCHK.COM)** or
+[download the separate memory diagnostic CF image](https://github.com/ARMoir/WIN31DSK/releases/download/tandy1000ex-win30-16color-memory-diagnostic-2026-11-05/TANDY1000EX_WIN30_16COLOR_MEMORY_DIAG_CF_31808S.img).
+
+The tool is 1,224 bytes, 8086/V20-compatible and read-only. The new CF
+image was built from the exact second trial, adding **only**
+`C:\TANDYCHK.COM`. It does not modify DOS startup, Windows, mouse,
+video driver, guarded WIN, or the previous Release images.
+
+Boot DOS, then type:
+
+```dos
+TANDYCHK
+```
+
+Photograph its output. It reports:
+- BIOS video mode, expected 3.
+- Conventional memory in KB from INT 12h and from the BIOS data area,
+  expected **624** for this particular guard.
+- DOS major.minor version, expected 3 or newer.
+- Tandy ROM signatures at `FFFF:000E` (expected `00FF`) and
+  `FC00:0000` (expected `0021`).
+- First DOS MCB, terminal MCB end (expected `9C00` for this guard),
+  and last MCB owner and size.
+
+The tool performs **no DOS allocations, video mode switch, memory writes
+or Windows startup**. It waits for a keypress before returning to DOS.
+Do not bypass `RESERVE.COM` even if one field differs. The next safe
+fix depends on the actual reported values.
+
+### Preserve known-good
+
+The verified Windows 3.0 + working Windows 1.04 Mouse Systems COM1
+image remains unchanged:
+https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-mouse-verified-2026-11-05
+
+---
