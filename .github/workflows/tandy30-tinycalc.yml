@@ -1,0 +1,179 @@
+name: Tandy EX 320x200 native compact TinyCalc build
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-tinycalc.yml'
+      - 'tools/tandy30/tinycalc/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install emulator and FAT16 tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dosbox-x mtools
+
+      - name: Fetch checksum-locked original 16-bit Windows compiler, SDK and libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init upstream
+          git -C upstream remote add origin https://github.com/astrobleem/oemdisplay-tandy.git
+          git -C upstream fetch --no-tags --depth=1 origin 4fe890a951d93826e9ced6dbb98934ef6e0dccd0
+          git -C upstream checkout --detach FETCH_HEAD
+          python3 upstream/tools/BUILDDEPS/DEPS.PY fetch --lock upstream/tools/BUILDDEPS/LOCK.JSON --out dep-git
+          python3 upstream/tools/BUILDDEPS/DEPS.PY materialize --lock upstream/tools/BUILDDEPS/LOCK.JSON --repo dep-git --out deps
+          python3 upstream/tools/BUILDDEPS/DEPS.PY verify --lock upstream/tools/BUILDDEPS/LOCK.JSON --deps deps
+
+      - name: Compile original 8086 Windows 3.0 calculator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app output
+          cp tools/tandy30/tinycalc/TCALC.C tools/tandy30/tinycalc/TCALC.DEF tools/tandy30/tinycalc/TCALC.RSP tools/tandy30/tinycalc/BUILD.BAT app/
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, subprocess
+          root=Path.cwd()
+          config=f"""[sdl]
+          fullscreen=false
+          output=surface
+          [dosbox]
+          machine=tandy
+          memsize=16
+          [cpu]
+          core=normal
+          cputype=8086_prefetch
+          cycles=fixed 200000
+          [mixer]
+          nosound=true
+          [midi]
+          mididevice=none
+          [autoexec]
+          @echo off
+          mount C "{root/'deps'}"
+          mount D "{root/'app'}"
+          D:
+          BUILD.BAT
+          """
+          (root/'app/BUILD.CNF').write_text(config)
+          env=dict(os.environ, SDL_VIDEODRIVER='dummy',SDL_AUDIODRIVER='dummy')
+          with (root/'app/HOST.LOG').open('wb') as stream:
+            subprocess.run(['/usr/bin/dosbox-x','-nopromptfolder','-conf',str(root/'app/BUILD.CNF')],env=env,stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=120)
+          log=(root/'app/BUILD.LOG').read_text(errors='replace')
+          print(log[-4000:])
+          assert 'PASS' in log and 'FAIL' not in log, 'Compiler or linker failed'
+          exe=(root/'app/TCALC.EXE').read_bytes()
+          assert exe[:2]==b'MZ'
+          ne=int.from_bytes(exe[0x3c:0x40],'little')
+          assert exe[ne:ne+2]==b'NE', 'Expected Win16 NE executable'
+          assert len(exe)<100000, 'Size unexpectedly large'
+          print('PASS real-mode Win16 executable structure',len(exe),'bytes')
+          PY
+          cp app/TCALC.EXE output/TCALC.EXE
+          sha256sum output/TCALC.EXE > output/TCALC.EXE.sha256
+
+      - name: Publish optional standalone EXE
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_TinyCalc_Windows3_320x200
+          path: |
+            output/TCALC.EXE
+            output/TCALC.EXE.sha256
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Install tiny compact Calculator on separate RRECT CF image, preserve all existing files
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download tandy1000ex-win30-rrect-16color-test-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img --dir output
+          echo 'bedf5aa14c6259ad526074ce2412528a91f170feda9b3798befb78e8746f5e8b  output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img' | sha256sum -c -
+          cp output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img output/TANDY1000EX_WIN30_RRECT_TINYCALC_320X200.img
+          IMG='output/TANDY1000EX_WIN30_RRECT_TINYCALC_320X200.img@@32256'
+          mcopy -o -i "$IMG" output/TCALC.EXE ::/WINDOWS/TCALC.EXE
+          printf 'Tandy TinyCalc 320x200\r\nWindows 3.0 Program Manager: File / Run / C:\\WINDOWS\\TCALC.EXE\r\nStock CALC.EXE is unchanged. Tandy graphics, mouse, fonts and boot untouched.\r\nDecimal precision: 3 places; max 99999.999; + - * / and keyboard supported.\r\n' > output/TCALC.TXT
+          mcopy -o -i "$IMG" output/TCALC.TXT ::/TCALC.TXT
+
+      - name: Validate DOS filesystem, all old files and mouse/video protection
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys,hashlib,struct
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          old=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_RRECT_16COLOR_RENDER_TEST.img').read_bytes()))
+          new=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_RRECT_TINYCALC_320X200.img').read_bytes()))
+          assert old.b[:old.part]==new.b[:new.part]
+          fatlen=struct.unpack_from('<H',new.b,new.part+22)[0]*512
+          assert new.b[new.fat:new.fat+fatlen]==new.b[new.fat+fatlen:new.fat+fatlen*2]
+          def allfiles(fs):
+            d={}
+            def walk(path='',cluster=None):
+              for _,name,attr,first,size in fs.entries(cluster):
+                if name in ('.','..'):continue
+                p=path+'/'+name
+                if attr&16:walk(p,first)
+                else:d[p]=hashlib.sha256(fs.read(p)).hexdigest()
+            walk();return d
+          a=allfiles(old);b=allfiles(new)
+          assert not set(a)-set(b)
+          assert {p for p in a if a[p]!=b[p]}==set(),'Existing files changed'
+          assert set(b)-set(a)=={'/WINDOWS/TCALC.EXE','/TCALC.TXT'}
+          assert new.read('/WINDOWS/TCALC.EXE')==Path('output/TCALC.EXE').read_bytes()
+          for f in ['/WINDOWS/CALC.EXE','/WINDOWS/SYSTEM.INI','/WINDOWS/WIN.INI',
+                    '/WINDOWS/SYSTEM/RR8.DRV','/WINDOWS/SYSTEM/TR73216.DRV',
+                    '/WINDOWS/SYSTEM/MSMOUSE1.DRV','/WIN.BAT','/AUTOEXEC.BAT',
+                    '/WINDOWS/SYSTEM/EGASYS.FON','/REST7.BAT']:
+            assert new.read(f)==old.read(f),f
+          assert b'RESERVE.COM' in new.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in new.read('/WIN.BAT').upper()
+          assert len(new.b)==31808*512
+          print('PASS: original image untouched except two new files; original CALC, display, mouse, fonts, guarded boot, partition and FAT mirror preserved')
+          PY
+          (cd output && sha256sum TANDY1000EX_WIN30_RRECT_TINYCALC_320X200.img > TANDY1000EX_WIN30_RRECT_TINYCALC_320X200.img.sha256)
+
+      - name: Upload separately bootable TinyCalc CF image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_320x200_TinyCalc_CF_Test
+          path: |
+            output/TANDY1000EX_WIN30_RRECT_TINYCALC_320X200.img
+            output/TANDY1000EX_WIN30_RRECT_TINYCALC_320X200.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate experimental GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-tinycalc-compact-test-2026-11-06
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'TinyCalc release already published; leave unchanged'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_RRECT_TINYCALC_320X200.img \
+            output/TANDY1000EX_WIN30_RRECT_TINYCALC_320X200.img.sha256 \
+            output/TCALC.EXE \
+            output/TCALC.EXE.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'EXPERIMENTAL Tandy 1000 EX compact TinyCalc 320x200 Windows 3.0 app' \
+            --notes 'Standalone 8086 Windows 3.0 calculator purpose-built to fit 320x200, plus separate bootable CF test image based on RRECT. No Windows Setup or graphics changes. From Program Manager use File > Run > C:\WINDOWS\TCALC.EXE. Original Windows CALC.EXE is retained. Fixed-point math with 3 decimals and 99999.999 limit; experimental app, awaiting physical-machine testing.' \
+            --prerelease --latest=false
