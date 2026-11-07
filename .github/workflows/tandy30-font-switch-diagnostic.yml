@@ -37,6 +37,11 @@ jobs:
           sys.path.insert(0,"tools/tandy30/int33-test")
           from fat16_image import Fat16
           fs=Fat16(bytearray(Path('TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img').read_bytes()))
+          for directory in ('/','/DOS','/WINDOWS'):
+            try:
+              names=[x[1] for x in fs.entries(None if directory=='/' else fs.lookup(directory)[3])]
+              print('DOS TOOLS',directory,[x for x in names if x.startswith(('FC.','COMP.','COMMAND.','XCOPY.','ATTRIB.'))])
+            except Exception as e:print('Directory inspect failed',directory,str(e))
           for p in ('/GOLDXY.BAT','/T4CGA.BAT','/TANDY4.BAT'):
             print(p,repr(fs.read(p)))
           PY
