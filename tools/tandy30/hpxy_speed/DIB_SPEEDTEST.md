@@ -1,6 +1,20 @@
 # Tandy 1000 EX, next 16-color responsiveness experiment: XR155 + DIB unroll
 
-**Status, November 6, 2026:** Built, statically validated and published as a **separate optional CF test image**. There is **no physical-Tandy performance measurement or compatibility confirmation** for this candidate. The owner's preferred XR155 + CGA-font default, adaptive four-color switch and original hardware-verified gold standard remain byte-for-byte unchanged.
+**Status, November 6, 2026:** Built, statically validated and now **tested on the owner's physical Tandy 1000 EX**. With the experimental `DIBXY` profile, Program Manager took **58 seconds** to appear fully and Calculator **24 seconds**. The owner reports that DIBXY **feels more responsive interactively**. That perception is valuable but has not been isolated in a controlled repaint benchmark. The owner's preferred XR155 + CGA default, adaptive four-color switch and original hardware-verified gold standard remain byte-for-byte unchanged.
+
+## Physical Tandy EX results, November 6, 2026
+
+The owner tested the experimental `DIBXY` selection on actual V20 hardware and reported:
+
+| Measurement | DIBXY (XR155 plus DIB unrolling, CGA fonts) | Earlier XRCGA baseline |
+| --- | ---: | ---: |
+| Program Manager fully loaded | **58 seconds** | Not measured for that exact matching profile in the earlier report |
+| Calculator fully loaded | **24 seconds** | **24 seconds** |
+| Interactive responsiveness | **Feels more responsive** | Earlier preferred working configuration |
+
+The 54-second Program Manager measurement reported in an earlier comparison was for the `FASTXY` profile, **not a like-for-like XRCGA-versus-DIBXY reading**, so avoid implying that DIBXY is slower by four seconds based on that number. The exact CGA-font Calculator comparison is 24 versus 24 seconds, consistent with the optimizer improving selected redraw and bitmap paths rather than overall startup time. Subjective responsiveness has not been independently measured; window repaint, menu opening, and dragging would make useful A/B checks if further tuning is warranted.
+
+**Decision:** Keep the proven `XRCGA` boot default, retain `DIBXY` as a validated-on-hardware optional performance candidate, and do not replace any existing released images. The next optimization should target interactive redraw behavior and full-refresh avoidance, with direct comparisons on physical hardware.
 
 ## Tested contents and links
 
