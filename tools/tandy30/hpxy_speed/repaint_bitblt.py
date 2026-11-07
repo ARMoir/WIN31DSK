@@ -108,7 +108,9 @@ def patch(renderer):
     if "\n" in text.replace("\r\n",""):
         raise RuntimeError("Refusing non-CRLF assembly source")
     if text.count(BLT_BEFORE)!=1:
-        raise RuntimeError("Expected exactly one original guarded TBitBlt block; found "+str(text.count(BLT_BEFORE)))
+        begin=text.index("cProc TBitBlt,")
+        end=text.index("cProc TOutput,",begin)
+        raise RuntimeError("Unexpected TBitBlt source; exact generated block follows:\\n"+text[begin:end][-4400:])
     if text.count("FlushRetainColumns proc near")!=0 and text.count("FlushRetainColumns label near")!=1:
         raise RuntimeError("Unexpected cursor-retain XY compositor symbol")
     after=text.replace(BLT_BEFORE,BLT_AFTER,1)
