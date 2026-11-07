@@ -1,4 +1,4 @@
-name: Tandy EX DIBXY default with bounded BitBlt rectangle repaint trial
+name: Tandy EX DIBXY default with narrow clipped-text redraw trial
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
     paths:
       - '.github/workflows/tandy30-dibxy-repaint.yml'
       - 'tools/tandy30/hpxy_speed/build_xr155_dib_repaint.py'
-      - 'tools/tandy30/hpxy_speed/repaint_bitblt.py'
+      - 'tools/tandy30/hpxy_speed/repaint_textclip.py'
   workflow_dispatch:
 
 permissions:
@@ -55,7 +55,7 @@ jobs:
           test "$(git -C upstream hash-object ../view/src/hpxydib/DIB.PY)" = e75be73fd88a109ae1f93b85191a7c30337e680b
 
 
-      - name: Compile XR155+DIB plus conservative bounded BitBlt repaint
+      - name: Compile XR155+DIB plus conservative clipped-text repaint
         shell: bash
         run: |
           set -euo pipefail
@@ -205,6 +205,6 @@ jobs:
             package/RPAINT.DRV \
             package/RPAINT_REPORT.json \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title 'Tandy EX: DIBXY default, optional bounded BitBlt repaint, CGA fonts, four-color fallback' \
-            --notes 'Separate EXPERIMENTAL 16 MB CF image. Default boots user-tested DIBXY (XR155+DIB) + compact CGA fonts, 320x200 16 colors, 640x256 panning, three-row Main/Accessories/Games. From DOS after Windows exits run REPIX then WIN to select the new experimental RPAINT.DRV, which conservatively redraws only a proven BitBlt destination rectangle instead of the entire affected rows, falling back to full conversion for unknown bounds and resync. Revert via DIBXY then WIN. XRCGA and original Microsoft T4CGA four-color profiles remain available. The beloved Windows boot logo, all games, all original 389+ files, original font and mouse binaries and screen layout are byte-identical to the tested DIBXY base. New driver passes 8086 MASM, NE memory and FAT identity checks, but does NOT have a physical Tandy qualification or proven performance improvement. Never overwrite the gold standard.' \
+            --title 'Tandy EX: DIBXY default, optional bounded text repaint, CGA fonts, four-color fallback' \
+            --notes 'Separate EXPERIMENTAL 16 MB CF image. Default boots user-tested DIBXY (XR155+DIB) + compact CGA fonts, 320x200 16 colors, 640x256 panning, three-row Main/Accessories/Games. From DOS after Windows exits run REPIX then WIN to select the new experimental RPAINT.DRV, which conservatively redraws only the columns inside a proven legal Windows text clipping rectangle instead of the entire row; unknown font/clip cases retain the original fallback. Revert via DIBXY then WIN. XRCGA and original Microsoft T4CGA four-color profiles remain available. The beloved Windows boot logo, all games, all original 389+ files, original font and mouse binaries and screen layout are byte-identical to the tested DIBXY base. New driver passes 8086 MASM, NE memory and FAT identity checks, but does NOT have a physical Tandy qualification or proven performance improvement. Never overwrite the gold standard.' \
             --prerelease --latest=false
