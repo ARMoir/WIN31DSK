@@ -2,7 +2,25 @@
 
 **Status:** November 6, 2026, experimental; build verified, first physical Tandy 4-color/font test pending. The original 16-color gold-standard release is **unchanged**.
 
-## Experimental image
+## Important correction, November 6, 2026: DOS profile switch failure
+
+**Use the [corrected four-color font-switch CF image](https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-4color-fontswitch-dosfix-2026-11-06)** for switching tests. The first image had a **DOS batch-file false failure**: the `COPY` command didn't reliably reset `ERRORLEVEL`, and the scripts treated a preserved nonzero code as a failed copy. Suppressed `COPY` output made the cause invisible on the hardware photo. This was not a failure of original `TANDYDSP.DRV` or the updated font binaries.
+
+The corrected image changed **only nine DOS BAT selector files**. Each now checks both source INI filenames, displays `COPY` output, then invokes the bundled `C:\\DOS\\FC.EXE /B` to verify the destination INI byte-for-byte before checking `ERRORLEVEL`. The image was validated in GitHub Actions. Physical test of the repaired scripts is still pending. Drivers, all font files, splash/boot logo, mouse, protected `WIN.BAT`, exact old 389+ app/game files and Program Manager geometry are untouched.
+
+For the previously flashed first image, a DOS prompt workaround (no reflashing) is:
+
+```bat
+COPY C:\\TANDY88\\T4CGA.INI C:\\WINDOWS\\SYSTEM.INI
+COPY C:\\TANDY88\\WIN4.INI C:\\WINDOWS\\WIN.INI
+C:\\DOS\\FC.EXE /B C:\\TANDY88\\T4CGA.INI C:\\WINDOWS\\SYSTEM.INI
+C:\\DOS\\FC.EXE /B C:\\TANDY88\\WIN4.INI C:\\WINDOWS\\WIN.INI
+WIN
+```
+
+Both `FC` commands must report no differences before starting Windows. To switch back to optimized XR155, replace `T4CGA.INI` with `XRXT.INI` and `WIN4.INI` with `WINXR.INI` in the same four commands. The standalone repaired image eliminates the need for manual copying.
+
+## Original experimental image (v1, switching commands have a DOS bug)
 
 - [Download CF image](https://github.com/ARMoir/WIN31DSK/releases/download/tandy1000ex-win30-original4color-fonttest-2026-11-06/TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img)
 - [GitHub Release](https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-original4color-fonttest-2026-11-06)
