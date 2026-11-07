@@ -1,6 +1,6 @@
 # Tandy 1000 EX: faster HPXY drawing, XR155 A/B driver experiment
 
-**Status (November 6, 2026):** exact upstream XR155 native driver bytes reproduced, 8086/8088 build/instruction audit passed, full gold-standard CF image byte-preservation checked. **Owner reported XR155 works well on the actual Tandy 1000 EX.** This confirms a successful initial physical-hardware use report, but does not establish a measured drawing-speed advantage, exhaustive app compatibility, or all panning-control behaviors. The original HPXY gold-standard release remains the fallback baseline.
+**Status (November 6, 2026):** exact upstream XR155 native driver bytes reproduced, 8086/8088 build/instruction audit passed, full gold-standard CF image byte-preservation checked. **Owner reports XR155 works well on physical Tandy EX hardware and provides initial timed GOLDXY vs FASTXY comparisons. Both measurements used the same updated XTIDE firmware.** This provides meaningful evidence of drawing/startup performance improvement, although a single set of timings does not fully isolate caching, run order or disk/application variability. The original HPXY three-row gold-standard release remains a preserved fallback baseline; XR155's complete application and pan compatibility remains unverified.
 
 ## Download
 
@@ -11,6 +11,19 @@
 
 Image SHA-256: `0f0238cce3e63182a7da06c5302de45435e03f7911399fdeb0559e8343cf412b`.
 XR155 driver SHA-256: `ae2d06f69ff68e64f099c3e0af79028e40e7dca89bd442de23eb18d36be4dca1`.
+
+## Owner's physical Tandy EX timed comparison, November 6, 2026
+
+**Important clarification:** Both configurations were tested **after the XTIDE firmware upgrade**, not across the firmware change. The owner explicitly corrected this point after earlier incorrect assumptions. Thus the updated XTIDE is held constant across the two measurements.
+
+| Fully visible/loaded operation | GOLDXY (original HPXY) | FASTXY (XR155) | Time saved | Reduction in elapsed time |
+| --- | ---: | ---: | ---: | ---: |
+| Program Manager | 1:07 (67 s) | 0:54 (54 s) | 13 s | 19.4% |
+| Calculator | 0:58 (58 s) | 0:21 (21 s) | 37 s | 63.8% |
+
+These are **user-reported wall-clock timings on the physical NEC V20 Tandy**, not emulator timings. The owner confirms both used updated XTIDE firmware. FASTXY is visibly compatible in the initial real-world test and markedly faster for the two measured operations. Other variables such as cold-versus-warm disk cache, benchmark repetition, and background activity were not reported as controlled, so avoid attributing every millisecond exclusively to narrower X/Y GDI copies. This evidence is nevertheless much stronger than the previous confounded hypothesis and warrants repeating the A/B in opposite order, without downgrading XTIDE.
+
+**Do not overwrite the verified gold-standard image**: XR155 remains a separately versioned, reversible performance candidate until a wider compatibility check.
 
 ## What this targets
 
