@@ -1,0 +1,145 @@
+name: Tandy EX display-dependent Program Manager layouts, XRCGA default
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-adaptive-layout.yml'
+      - 'tools/tandy30/font_switch/adaptive_layout.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-preserve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FAT16 tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Download checksum-pinned owner-preferred XR155 plus CGA font image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source output
+          gh release download tandy1000ex-win30-xrcga-default-t4cga-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img \
+            --dir source
+          echo '0b1f0986e7befb59f6f5ae53030a3d49725e137376234703bea5cb7ccb2ea3b3  source/TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img' | sha256sum -c -
+
+      - name: Preserve two window layouts and update all nine DOS profile switches
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/font_switch/adaptive_layout.py \
+            --source source/TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img \
+            --output output/TANDY1000EX_WIN30_XRCGA_T4CGA_ADAPTIVE_LAYOUT_CF.img \
+            --staging output/staging
+          (cd output && sha256sum TANDY1000EX_WIN30_XRCGA_T4CGA_ADAPTIVE_LAYOUT_CF.img > TANDY1000EX_WIN30_XRCGA_T4CGA_ADAPTIVE_LAYOUT_CF.img.sha256)
+
+      - name: Verify image file inventory, groups, font profiles, switches and untouched logo
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import importlib.machinery,hashlib,struct,sys
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          m=importlib.machinery.SourceFileLoader('adaptive','tools/tandy30/font_switch/adaptive_layout.py').load_module()
+          original=Fat16(bytearray(Path('source/TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img').read_bytes()))
+          new=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_XRCGA_T4CGA_ADAPTIVE_LAYOUT_CF.img').read_bytes()))
+          assert len(original.b)==len(new.b)==31808*512
+          assert original.b[:original.part]==new.b[:new.part], 'MBR or partition changed'
+          fsz=struct.unpack_from('<H',new.b,new.part+22)[0]*512
+          assert new.b[new.fat:new.fat+fsz]==new.b[new.fat+fsz:new.fat+2*fsz], 'FAT mirrors changed'
+          def inventory(fs):
+            paths={}
+            def go(prefix='',start=None):
+              for _,n,attr,c,size in fs.entries(start):
+                if n in ('.','..'):continue
+                path=prefix+'/'+n
+                if attr&16:go(path,c)
+                else:paths[path]=hashlib.sha256(fs.read(path)).hexdigest()
+            go()
+            return paths
+          a,b=inventory(original),inventory(new)
+          changed={p for p in a if a[p]!=b[p]}
+          expected_changed={'/'+name+'.BAT' for name in m.MODES}
+          assert changed==expected_changed,('Original files changed',changed)
+          added=set(b)-set(a)
+          expect_add={'/TANDY88/PM16.INI','/TANDY88/PM4.INI'}|{
+            '/TANDY88/'+prefix+suffix+'.GRP'
+            for prefix in 'MAG' for suffix in ('16','4')
+          }
+          assert added==expect_add,(added,expect_add)
+          assert not set(a)-set(b), 'Original files missing'
+          assert new.read('/WINDOWS/SYSTEM.INI')==original.read('/TANDY88/XRCGA.INI')
+          assert new.read('/WINDOWS/WIN.INI')==original.read('/TANDY88/WINXR.INI')
+          assert new.read('/WINDOWS/PROGMAN.INI')==new.read('/TANDY88/PM16.INI')
+          assert b'Window=0 0 636 196 1' in new.read('/TANDY88/PM4.INI')
+          assert b'Window=0 0 316 196 1' in new.read('/TANDY88/PM16.INI')
+          for group,prefix in (('MAIN','M'),('ACCESSOR','A'),('GAMES','G')):
+            orig=original.read('/WINDOWS/'+group+'.GRP')
+            assert new.read('/WINDOWS/'+group+'.GRP')==orig
+            assert new.read('/TANDY88/'+prefix+'16.GRP')==orig
+            wide=new.read('/TANDY88/'+prefix+'4.GRP')
+            assert wide==m.widen_group(orig,group)
+            assert m.checksum_ok(wide)
+            assert orig[18:]==wide[18:], 'All shortcut/icon data must be unchanged'
+          for name,(system,windows,mode) in m.MODES.items():
+            script=new.read('/'+name+'.BAT')
+            assert script==m.batch(name,system,windows,mode)
+            assert script.count(b'C:\\DOS\\FC.EXE /B')==6
+            assert script.count(b'IF ERRORLEVEL 1 GOTO BAD')==6
+            assert b'C:\\WINDOWS\\PROGMAN.INI' in script
+            for group in ('MAIN','ACCESSOR','GAMES'):
+              assert ('C:\\WINDOWS\\'+group+'.GRP').encode() in script
+          for p in a:
+            if any(p.endswith(ext) for ext in ('.EXE','.COM','.DRV','.FON','.GRP','.INI','.BMP','.TXT','.WAV')) or any(v in p.upper() for v in ('LOGO','SPLASH')):
+              assert a[p]==b[p],p
+          for path in ('/WIN.BAT','/AUTOEXEC.BAT','/CONFIG.SYS','/WINDOWS/PAN.EXE',
+                       '/WINDOWS/SYSTEM/MSMOUSE1.DRV','/WINDOWS/SYSTEM/TANDYDSP.DRV',
+                       '/WINDOWS/SYSTEM/XR155.DRV','/WINDOWS/SYSTEM/HPXY.DRV'):
+            assert original.read(path)==new.read(path),path
+          assert b'RESERVE.COM' in new.read('/WIN.BAT').upper()
+          print('PASS:',len(a),'existing files retained, exactly nine BAT files updated and eight fixed/wide layout snapshots added')
+          print('PASS: active default XR155+CGA unchanged, boot logo, mouse, original 4-color driver, guarded launcher, programs and games preserved')
+          print('PASS: compact 320 layout EXACT original, wide 640 layout alters header rectangle and checksum only')
+          PY
+
+      - name: Upload finished 16 MB CF image and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_XRCGA_default_Adaptive_320_640_3Row_Windows
+          path: |
+            output/TANDY1000EX_WIN30_XRCGA_T4CGA_ADAPTIVE_LAYOUT_CF.img
+            output/TANDY1000EX_WIN30_XRCGA_T4CGA_ADAPTIVE_LAYOUT_CF.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate versioned experimental image, preserve gold
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-xrcga-t4cga-adaptive-layout-2026-11-06
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Existing release retained immutable'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_XRCGA_T4CGA_ADAPTIVE_LAYOUT_CF.img \
+            output/TANDY1000EX_WIN30_XRCGA_T4CGA_ADAPTIVE_LAYOUT_CF.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'Tandy EX Windows 3.0: XR155+CGA default, T4CGA four-color fallback, auto-fit three rows per display' \
+            --notes 'Starts with owner-preferred XRCGA: XR155 16-color 640x256 pannable desktop, 320x200 physical view, compact CGA fonts, BorderWidth=2, unchanged 316px three-row Main / Accessories / Games home screen. From DOS type T4CGA then WIN for original 640x200 four-color Tandy driver with CGA fonts and wider 636px Program Manager with three one-row groups; exit Windows, type XRCGA then WIN to restore byte-identical 320px home layout. All nine existing DOS display/font selectors restore the corresponding Program Manager INI and three PMCC group window rectangles, verified using MS-DOS FC.EXE /B after COPY. Other shortcuts, icon/resource bytes, original Windows splash/boot logo, mouse, font and graphics binaries, protected WIN.BAT, games, panning helper, original backups and gold-standard release preserved unchanged. This is a new build with static verification only; 640-wide window placement awaits physical Tandy test. Requires exiting Windows before changing display/font profile.' \
+            --prerelease --latest=false
