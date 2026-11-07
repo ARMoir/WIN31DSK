@@ -1,0 +1,130 @@
+name: Repair Tandy DOS font and display switching, byte-verified COPY
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-font-switch-fix.yml'
+      - 'tools/tandy30/font_switch/repair_switch.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FAT16 image tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Download exact original four-color font test image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source output
+          gh release download tandy1000ex-win30-original4color-fonttest-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img \
+            --dir source
+          echo '9d2451f83baa313d6f96078a39c4969ca236401d52ca7a7e440318403db97b86  source/TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img' | sha256sum -c -
+
+      - name: Repair only nine display/font DOS switch scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/font_switch/repair_switch.py \
+            --source source/TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img \
+            --output output/TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img \
+            --stage output/staging
+          (cd output && sha256sum TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img > TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img.sha256)
+
+      - name: Verify exact preserved file inventory and all non-BAT data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,sys,struct
+          sys.path.insert(0,"tools/tandy30/int33-test")
+          from fat16_image import Fat16
+          from importlib.machinery import SourceFileLoader
+          mod=SourceFileLoader("repair","tools/tandy30/font_switch/repair_switch.py").load_module()
+          old=Fat16(bytearray(Path('source/TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img').read_bytes()))
+          new=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img').read_bytes()))
+          assert len(old.b)==len(new.b)==31808*512
+          assert old.b[:old.part]==new.b[:new.part]
+          fatsz=struct.unpack_from('<H',new.b,new.part+22)[0]*512
+          assert new.b[new.fat:new.fat+fatsz]==new.b[new.fat+fatsz:new.fat+2*fatsz]
+          def inventory(fs):
+            out={}
+            def rec(prefix='',cluster=None):
+              for _,name,attr,c,_ in fs.entries(cluster):
+                if name in ('.','..'):continue
+                path=prefix+'/'+name
+                if attr&16:rec(path,c)
+                else:out[path]=hashlib.sha256(fs.read(path)).hexdigest()
+            rec();return out
+          a,b=inventory(old),inventory(new)
+          assert set(a)==set(b)
+          actual={p for p in a if a[p]!=b[p]}
+          expected={'/'+n+'.BAT' for n in mod.SWITCHES}
+          assert actual==expected,(actual,expected)
+          assert new.locate('/DOS/FC.EXE')[4]>1000,'FC.EXE must be present for reliable error levels'
+          for name,(sysprofile,winprofile) in mod.SWITCHES.items():
+            script=new.read('/'+name+'.BAT')
+            assert script==mod.make(name,sysprofile,winprofile)
+            assert b'C:\\DOS\\FC.EXE /B ' in script
+            assert script.count(b'IF ERRORLEVEL 1')==2
+            assert script.count(b'COPY ')>=2
+            assert b'IF NOT EXIST ' in script
+          for p in a:
+            if p.endswith(('.EXE','.COM','.DRV','.FON','.GRP','.INI','.BMP','.TXT')) or 'LOGO' in p or 'SPLASH' in p:
+              assert a[p]==b[p],p
+          for p in ('/WIN.BAT','/AUTOEXEC.BAT','/CONFIG.SYS',
+                    '/WINDOWS/SYSTEM.INI','/WINDOWS/WIN.INI',
+                    '/WINDOWS/PROGMAN.INI','/WINDOWS/MAIN.GRP',
+                    '/WINDOWS/ACCESSOR.GRP','/WINDOWS/GAMES.GRP'):
+            assert old.read(p)==new.read(p),p
+          assert b'RESERVE.COM' in new.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in new.read('/WIN.BAT').upper()
+          print('PASS original',len(a),'file inventory; only nine batch scripts corrected')
+          print('PASS COM1 mouse, four-color original Microsoft driver, three font sets, HPXY/XR155, logo, all Games and startup preserved')
+          print('PASS DOS FC.EXE present and every switch verifies both copied INIs instead of reusing stale COPY ERRORLEVEL')
+          PY
+
+      - name: Upload standalone fixed CF image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_4Color_FontSwitch_Fixed_DOS_Copy
+          path: |
+            output/TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img
+            output/TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img.sha256
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish versioned repair release, preserve old tests untouched
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-4color-fontswitch-dosfix-2026-11-06
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Never overwrite an existing release'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img \
+            output/TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'FIXED: Tandy original 4-color and XR155 16-color profile/font DOS switcher (boot logo preserved)' \
+            --notes 'Repaired experimental 4-color font-switch CF image. The prior version printed ERROR on the real Tandy because DOS COPY did not reliably refresh the inherited ERRORLEVEL; scripts also hid COPY output. The new scripts show COPY output and validate both resulting INI files with C:\DOS\FC.EXE /B, which sets meaningful exit codes. Existing original DOS 6.22 FC.EXE verified present. Select at DOS: TANDY4, T4CGA or T4EGA (original 4-color Microsoft TANDYDSP with XT/CGA/EGA font set); FASTXY, XRXT, XRCGA, XREGA (optimized 16-color XR155 with 640x256 panning); GOLDXY (original hardware-verified HPXY). Type WIN after selection. All old binaries, original fonts, video splash/boot logo, COM1 mouse, Main/Accessories/Games layout, exact WIN.BAT startup and 394 original files remain unchanged; only 9 DOS BAT switch scripts differ. Original gold-standard and experimental releases not replaced. New DOS script behavior is not yet confirmed on physical hardware.' \
+            --prerelease --latest=false
