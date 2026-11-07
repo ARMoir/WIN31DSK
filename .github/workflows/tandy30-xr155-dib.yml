@@ -46,7 +46,12 @@ jobs:
             cp -a "upstream/experiments/$d" "view/experiments/$d"
           done
           cp -a upstream/src/rrect/RRPATCH.PY view/src/rrect/
-          cp -a upstream/src/hpxydib/DIB.PY view/src/hpxydib/
+          # DIB optimization was developed after the pinned XR155 source base.
+          # Fetch only its exact Git object, without floating main or altering
+          # the older compiler/source closure.
+          git -C upstream fetch --no-tags --depth=1 origin 263e6d0f5299ee8ffb278493f0587e15698b454c
+          git -C upstream show 263e6d0f5299ee8ffb278493f0587e15698b454c:src/hpxydib/DIB.PY > view/src/hpxydib/DIB.PY
+          test "$(git -C upstream hash-object ../view/src/hpxydib/DIB.PY)" = e75be73fd88a109ae1f93b85191a7c30337e680b
 
       - name: Build XR155+DIB and enforce 8086 instructions, NE allocation and patch pins
         shell: bash
