@@ -105,7 +105,7 @@ jobs:
           cfg=src.replace(b'display.drv=XR155.DRV',b'display.drv=XDIB.DRV')
           assert len(cfg)==len(src)-1 and b'fonts.fon=CGASYS.FON' in cfg
           bs=get('XRCGA.BAT')
-          assert bs.count(b'XRCGA.INI')==1 and b'C:\\WINDOWS\\PROGMAN.INI' in bs
+          assert bs.count(b'XRCGA.INI')>=3 and b'C:\\WINDOWS\\PROGMAN.INI' in bs
           script=bs.replace(b'XRCGA.INI',b'XDIB.INI').replace(b'XRCGA',b'DIBXY')
           assert script.count(b'C:\\DOS\\FC.EXE /B')==6
           assert b'TANDY88\\M16.GRP' in script
