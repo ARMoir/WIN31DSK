@@ -154,6 +154,12 @@ def main():
         snapshot=SNAPSHOTS[(driver,flavor)]
         switchwin="WIN4.INI" if driver=="TANDYDSP.DRV" else "WINXR.INI"
         cp_write(a.out,name+".BAT",make_switch(name,snapshot,switchwin),a.staging)
+    # Existing FASTXY/GOLDXY commands must also restore WIN.INI after
+    # a fixed Tandy 4-color session (which disables the PAN startup helper).
+    cp_write(a.out,"FASTXY.BAT",
+             make_switch("FASTXY","XRXT.INI","WINXR.INI"),a.staging)
+    cp_write(a.out,"GOLDXY.BAT",
+             make_switch("GOLDXY","SYSHPXY.INI","WINXR.INI"),a.staging)
     # First boot into original TANDYDSP with modern fonts, as requested.
     t4=cp_read(a.out,"TANDY88/T4XT.INI",a.staging)
     cp_write(a.out,"WINDOWS/SYSTEM.INI",t4,a.staging)
