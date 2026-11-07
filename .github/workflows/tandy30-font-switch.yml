@@ -1,0 +1,149 @@
+name: Tandy original four-color driver plus three font sets, XR155 switch
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-font-switch.yml'
+      - 'tools/tandy30/font_switch/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FAT16 read and write utilities
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Retrieve the exact XR155 CF test and original mouse-verified four-color image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source output
+          gh release download tandy1000ex-win30-hpxyspeed-xr155-trial-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img --dir source
+          echo '0f0238cce3e63182a7da06c5302de45435e03f7911399fdeb0559e8343cf412b  source/TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img' | sha256sum -c -
+          gh release download tandy1000ex-win30-mouse-verified-2026-11-05 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img --dir source
+          echo 'eca08b0eb4283854bfef71d98d8febe08ad8de89eb3d52a109a0b9d39993fa34  source/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img' | sha256sum -c -
+
+      - name: Create original Tandy 640x200 4-color plus XT/CGA/EGA font variants, reversible XR155
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/font_switch/build_profiles.py \
+            --source source/TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img \
+            --mouse-original source/TANDY1000EX_WIN104_MSSYS_COM1_CF_31808S.img \
+            --out output/TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img \
+            --staging output/staging
+          (cd output && sha256sum TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img > TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img.sha256)
+
+      - name: Verify no original boot logo, game, driver, program or font binary changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys,hashlib,struct
+          sys.path.insert(0,"tools/tandy30/int33-test")
+          from fat16_image import Fat16
+          o=Fat16(bytearray(Path("source/TANDY1000EX_WIN30_HPXYSPEED_XR155_16COLOR_CF.img").read_bytes()))
+          n=Fat16(bytearray(Path("output/TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img").read_bytes()))
+          assert len(o.b)==len(n.b)==31808*512
+          assert o.b[:o.part]==n.b[:n.part],"MBR or partition changed"
+          bytes_per_fat=struct.unpack_from("<H",n.b,n.part+22)[0]*512
+          assert n.b[n.fat:n.fat+bytes_per_fat]==n.b[n.fat+bytes_per_fat:n.fat+2*bytes_per_fat],"FAT copies differ"
+          def entries(fs):
+            out={}
+            def walk(prefix="",root=None):
+              for _,name,attr,c,size in fs.entries(root):
+                if name in (".",".."):continue
+                path=prefix+"/"+name
+                if attr&16:walk(path,c)
+                else:out[path]=hashlib.sha256(fs.read(path)).hexdigest()
+            walk();return out
+          old,new=entries(o),entries(n)
+          assert set(old).issubset(new),("Missing originals",set(old)-set(new))
+          changed={p for p in old if old[p]!=new[p]}
+          expected_changed={"/WINDOWS/SYSTEM.INI","/WINDOWS/WIN.INI","/FASTXY.BAT","/GOLDXY.BAT"}
+          assert changed==expected_changed,(changed,expected_changed)
+          new_only=set(new)-set(old)
+          expected_new={"/TANDY88/WIN4.INI","/TANDY88/WINXR.INI"} | {
+            "/TANDY88/"+name for name in ("T4XT.INI","T4CGA.INI","T4EGA.INI",
+                                          "XRXT.INI","XRCGA.INI","XREGA.INI")
+          } | {"/"+name+".BAT" for name in
+                ("TANDY4","T4XT","T4CGA","T4EGA","XRXT","XRCGA","XREGA")}
+          assert new_only==expected_new,(new_only,expected_new)
+          for p in old:
+            if p.endswith((".EXE",".COM",".DRV",".FON",".GRP",".BMP",".GR2",".FOT")) or p=="/WIN.BAT" or "LOGO" in p or "SPLASH" in p:
+              assert old[p]==new[p],("Original program/logo/font/game changed",p)
+          assert n.read("/WINDOWS/SYSTEM/TANDYDSP.DRV")==o.read("/WINDOWS/SYSTEM/TANDYDSP.DRV")
+          assert n.read("/WINDOWS/SYSTEM/XR155.DRV")==o.read("/WINDOWS/SYSTEM/XR155.DRV")
+          assert n.read("/WINDOWS/PROGMAN.INI")==o.read("/WINDOWS/PROGMAN.INI")
+          assert n.read("/WINDOWS/MAIN.GRP")==o.read("/WINDOWS/MAIN.GRP")
+          assert n.read("/WINDOWS/ACCESSOR.GRP")==o.read("/WINDOWS/ACCESSOR.GRP")
+          assert n.read("/WINDOWS/GAMES.GRP")==o.read("/WINDOWS/GAMES.GRP")
+          assert n.read("/AUTOEXEC.BAT")==o.read("/AUTOEXEC.BAT")
+          assert n.read("/CONFIG.SYS")==o.read("/CONFIG.SYS")
+          assert b"RESERVE.COM" in n.read("/WIN.BAT").upper()
+          assert b"WIN.COM /R" in n.read("/WIN.BAT").upper()
+          assert b"display.drv=TANDYDSP.DRV" in n.read("/WINDOWS/SYSTEM.INI")
+          assert b"fonts.fon=XTCSYS.FON" in n.read("/WINDOWS/SYSTEM.INI")
+          assert b"load=\r\n" in n.read("/WINDOWS/WIN.INI"),"No framebuffer PAN with original 640x200 display"
+          assert b"load=C:\\WINDOWS\\PAN.EXE" in n.read("/TANDY88/WINXR.INI")
+          assert b"load=\r\n" in n.read("/TANDY88/WIN4.INI")
+          assert b"BorderWidth=2" in n.read("/WINDOWS/WIN.INI")
+          for cfg in ("T4XT","T4CGA","T4EGA","XRXT","XRCGA","XREGA"):
+            snapshot=n.read("/TANDY88/"+cfg+".INI")
+            assert b"mouse.drv=msmouse1.drv" in snapshot.lower()
+            assert b"shell=progman.exe" in snapshot
+          for cmd in ("TANDY4","T4XT","T4CGA","T4EGA","XRXT","XRCGA","XREGA","FASTXY","GOLDXY"):
+            batch=n.read("/"+cmd+".BAT")
+            assert b"WIN.INI" in batch and b"SYSTEM.INI" in batch
+          assert n.read("/TANDY88/T4XT.INI")==n.read("/WINDOWS/SYSTEM.INI")
+          assert n.read("/TANDY88/WIN4.INI")==n.read("/WINDOWS/WIN.INI")
+          print("PASS:",len(old),"original files retained; only",len(changed),"config and switch scripts modified, plus",len(new_only),"new files")
+          print("PASS: Original TANDYDSP four-color driver, entire modern Windows font binary inventory, WIN splash/logo and serial mouse preserved byte-for-byte")
+          print("PASS: gold-standard three-row Program Manager and every original game unchanged")
+          print("PASS: six display/font configurations plus TANDY4 command and original GOLDXY/FASTXY updated to re-enable panning")
+          PY
+
+      - name: Upload complete bootable CF image and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_Original_4Color_XT_CGA_EGA_Fonts_XR155
+          path: |
+            output/TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img
+            output/TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separate test release; never change gold-standard or XR155 assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-original4color-fonttest-2026-11-06
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Do not overwrite immutable release" && exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img \
+            output/TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "EXPERIMENTAL Tandy original 640x200 four-color driver, modern XT/CGA/EGA font switching, XR155 fallback" \
+            --notes 'Experiment on physical Tandy EX. **Initially boots the original Microsoft TANDYDSP.DRV 640x200 four-color driver with the updated XTCSYS/XTCFIX/XTCOEM fonts.** At DOS, TANDY4/T4XT selects 4-color + XT fonts; T4CGA uses the smaller classic CGA fonts; T4EGA the EGA fonts. XRXT or FASTXY returns 16-color XR155+XT fonts and 640x256 true panning; XRCGA and XREGA pair XR155 with alternate font sets. GOLDXY returns original gold-standard HPXY+XT fonts. Type WIN after each DOS switch; graphics/font selection is not dynamic while Windows runs. PAN is disabled only for four-color (fixed 640x200), automatically restored for XR155/HPXY. Original TANDYDSP.DRV is verified byte-identical to the mouse-tested original Windows image. All EXE/COM/DRV/FON/GRP/logo files, Games, existing three-row Program Manager geometry, COM1 mouse, guarded TGA3+RESERVE+WIN launcher are unchanged. Expected text metrics/compatibility and speed of alternate fonts remain untested on physical hardware. Do not overwrite the gold-standard release.' \
+            --prerelease --latest=false
