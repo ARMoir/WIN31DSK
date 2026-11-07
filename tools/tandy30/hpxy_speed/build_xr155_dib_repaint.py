@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build experimental XR155 + DIB + bounded rectangle repaint.
+"""Build experimental XR155 + DIB + conservatively clipped text repaint.
 
 Reproduce the exact existing XR155 source pipeline and add the upstream
 hpxydib/DIB.PY optimization after the XR155 overlay, before the 8086
@@ -26,7 +26,7 @@ def main():
     b=load("build88_dib",repo/"src/tandysw/BUILD88.PY")
     xy=load("xr155_xy",repo/"experiments/XYRRECT/XRPATCH.PY")
     dib=load("xr155_dib",repo/"src/hpxydib/DIB.PY")
-    repaint=load("xr155_repaint",Path(__file__).with_name("repaint_bitblt.py"))
+    repaint=load("xr155_repaint",Path(__file__).with_name("repaint_textclip.py"))
     original_prep=b.baseline.prepare
     original_run=b.bounded_run
     state={}
@@ -76,7 +76,7 @@ def main():
     gross=sum(struct.unpack_from("<H",binary,off+8*i+6)[0] or 65536 for i in range(n))
     if gross>127531:raise SystemExit("Above pinned NE budget: "+str(gross))
     (out/"RPAINT.DRV").write_bytes(binary)
-    result=dict(candidate="XR155 + upstream DIB four-group unrolling + bounded XY BitBlt repaint",
+    result=dict(candidate="XR155 + upstream DIB four-group unrolling + bounded XY text-clip repaint",
                 mode="640x256 logical panning, 320x200 16-color view",
                 runtime="NOT_TESTED_ON_PHYSICAL_TANDY",
                 original_runtime_driver="XDIB.DRV",
