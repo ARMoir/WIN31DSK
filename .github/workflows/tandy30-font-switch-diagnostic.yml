@@ -1,0 +1,42 @@
+name: Diagnose Tandy DOS profile switch failures (read-only)
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-font-switch-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch released original four-color font switch image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download tandy1000ex-win30-original4color-fonttest-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img
+          echo '9d2451f83baa313d6f96078a39c4969ca236401d52ca7a7e440318403db97b86  TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img' | sha256sum -c -
+      - name: Inspect FAT16 directory attributes, source and target file names
+        run: |
+          python3 tools/tandy30/font_switch/diagnose_switch.py TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img
+      - name: Inspect original batch source for unsupported DOS syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0,"tools/tandy30/int33-test")
+          from fat16_image import Fat16
+          fs=Fat16(bytearray(Path('TANDY1000EX_WIN30_ORIGINAL4COLOR_FONTTEST_XR155_SWITCH_CF.img').read_bytes()))
+          for p in ('/GOLDXY.BAT','/T4CGA.BAT','/TANDY4.BAT'):
+            print(p,repr(fs.read(p)))
+          PY
