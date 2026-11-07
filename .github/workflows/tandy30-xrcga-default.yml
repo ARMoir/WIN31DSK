@@ -1,0 +1,129 @@
+name: Tandy EX preferred XR155 + CGA font default, 4-color fallback
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-xrcga-default.yml'
+      - 'tools/tandy30/font_switch/xrcga_default.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-preferred:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FAT16 tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Download exact fixed-switch four-color and XR155 source CF image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source output
+          gh release download tandy1000ex-win30-4color-fontswitch-dosfix-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img \
+            --dir source
+          echo 'f0409e06202c328b36a8cbf1f35e8ea86af62a5b52e1bdf3ddf3086dc63d3ecd  source/TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img' | sha256sum -c -
+
+      - name: Change only active Windows INIs to hardware-preferred XR155 plus CGA fonts
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/font_switch/xrcga_default.py \
+            --source source/TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img \
+            --output output/TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img \
+            --staging output/staging
+          (cd output && sha256sum TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img > TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img.sha256)
+
+      - name: Verify unchanged FAT, original splash/logo, games, mouse, switchers and groups
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,sys,struct
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          old=Fat16(bytearray(Path('source/TANDY1000EX_WIN30_4COLOR_FONT_SWITCH_DOS_FIX_CF.img').read_bytes()))
+          new=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img').read_bytes()))
+          assert len(old.b)==len(new.b)==31808*512
+          assert old.b[:old.part]==new.b[:new.part], 'MBR/partition changed'
+          fatsz=struct.unpack_from('<H',new.b,new.part+22)[0]*512
+          assert new.b[new.fat:new.fat+fatsz]==new.b[new.fat+fatsz:new.fat+2*fatsz], 'FAT mirrors differ'
+          def inventory(fs):
+            out={}
+            def scan(prefix='',cluster=None):
+              for _,name,attr,c,_ in fs.entries(cluster):
+                if name in ('.','..'):continue
+                path=prefix+'/'+name
+                if attr & 16:scan(path,c)
+                else:out[path]=hashlib.sha256(fs.read(path)).hexdigest()
+            scan()
+            return out
+          a,b=inventory(old),inventory(new)
+          assert set(a)==set(b),('Missing or added',set(a)^set(b))
+          changed={p for p in a if a[p]!=b[p]}
+          assert changed=={'/WINDOWS/SYSTEM.INI','/WINDOWS/WIN.INI'},changed
+          assert new.read('/WINDOWS/SYSTEM.INI')==old.read('/TANDY88/XRCGA.INI')
+          assert new.read('/WINDOWS/WIN.INI')==old.read('/TANDY88/WINXR.INI')
+          for key in (b'display.drv=XR155.DRV',b'fonts.fon=CGASYS.FON',
+                      b'fixedfon.fon=CGAFIX.FON',b'oemfonts.fon=CGAOEM.FON'):
+            assert key in new.read('/WINDOWS/SYSTEM.INI'),key
+          for key in (b'load=C:\\WINDOWS\\PAN.EXE',b'BorderWidth=2'):
+            assert key in new.read('/WINDOWS/WIN.INI'),key
+          for p in ('/WINDOWS/PROGMAN.INI','/WINDOWS/MAIN.GRP','/WINDOWS/ACCESSOR.GRP',
+                    '/WINDOWS/GAMES.GRP','/WINDOWS/SYSTEM/TANDYDSP.DRV',
+                    '/WINDOWS/SYSTEM/HPXY.DRV','/WINDOWS/SYSTEM/XR155.DRV',
+                    '/WINDOWS/SYSTEM/MSMOUSE1.DRV',
+                    '/WINDOWS/SYSTEM/XTCSYS.FON','/WINDOWS/SYSTEM/CGASYS.FON',
+                    '/WINDOWS/PAN.EXE','/WIN.BAT','/AUTOEXEC.BAT','/CONFIG.SYS',
+                    '/T4CGA.BAT','/XRCGA.BAT','/FASTXY.BAT','/GOLDXY.BAT',
+                    '/TANDY88/T4CGA.INI','/TANDY88/XRCGA.INI','/TANDY88/WINXR.INI','/TANDY88/WIN4.INI'):
+            assert old.read(p)==new.read(p),p
+          for p in a:
+            if any(p.endswith(ext) for ext in ('.EXE','.COM','.DRV','.FON','.GRP','.BMP','.TXT')) or any(x in p.upper() for x in ('LOGO','SPLASH')):
+              assert a[p]==b[p],p
+          assert b'RESERVE.COM' in new.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in new.read('/WIN.BAT').upper()
+          print('PASS:',len(a),'files preserved; only the active SYSTEM.INI and WIN.INI differ')
+          print('PASS: Logo/splash, three-row Program Manager, all 27 shortcuts, protected boot, fonts, games, mouse and original Tandy 4-color driver unchanged')
+          print('PASS: XRCGA default, exact T4CGA rollback and FASTXY/GOLDXY options preserved')
+          PY
+
+      - name: Upload complete bootable CF image and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_EX_XR155_CGA_fonts_default_4color_switch
+          path: |
+            output/TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img
+            output/TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish a new release; NEVER overwrite original gold standard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-xrcga-default-t4cga-2026-11-06
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release already exists, no overwriting'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img \
+            output/TANDY1000EX_WIN30_XRCGA_DEFAULT_T4CGA_SWITCH_CF.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'Preferred Tandy EX Windows 3.0: XR155 16-color panning + clean CGA fonts, T4CGA fallback' \
+            --notes 'Built from the owner-tested corrected DOS switcher CF image. The default after flashing is XRCGA: optimized XR155, 320x200 viewport, 640x256 logical panning, 16 colors, compact CGA fonts, BorderWidth=2 and three stacked Main / Accessories / Games groups. From DOS type WIN. Exit Windows, run T4CGA then WIN to use the original Microsoft 640x200 four-color Tandy driver with CGA fonts (without HPXY panning). To return to the preferred default exit Windows and run XRCGA then WIN. FASTXY selects XR155 with XT fonts, GOLDXY restores original HPXY. Original boot logo and all other programs, games, fonts, display drivers, serial mouse and safeguarded DOS launcher unchanged; the workflow verifies that exactly WINDOWS/SYSTEM.INI and WINDOWS/WIN.INI differ. The old gold-standard release remains untouched. Both XRCGA and T4CGA were user-tested on physical hardware in the prior switching release; this new default-selection disk has passed build validation but is not separately hardware-boot-verified.' \
+            --prerelease --latest=false
