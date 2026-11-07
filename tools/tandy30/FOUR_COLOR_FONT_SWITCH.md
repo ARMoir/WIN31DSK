@@ -1,6 +1,24 @@
 # Tandy 1000 EX original 4-color display and switchable Windows fonts
 
-**Status:** November 6, 2026, experimental; build verified, first physical Tandy 4-color/font test pending. The original 16-color gold-standard release is **unchanged**.
+**Status:** November 6, 2026, hardware-tested four-color and XR155 font switching, with measured Calculator times below. The original 16-color gold-standard release is **unchanged**.
+
+## Physical Tandy EX hardware test: font and display comparison (November 6, 2026)
+
+**Owner-verified:** All original four-color `TANDYDSP.DRV` profiles start quickly and feel very responsive on the physical Tandy 1000 EX. The EGA font set is noticeably larger; this is an important readability/layout tradeoff at these low resolutions. The switched XR155 font profiles also boot, and the owner timed Calculator until it was fully loaded:
+
+| DOS selection | Display driver and font set | Calculator loading time | Owner observation |
+| --- | --- | ---: | --- |
+| `FASTXY` | XR155 16 colors, XT font | **23 seconds** | Fastest numeric result |
+| `XRCGA` | XR155 16 colors, CGA font | **24 seconds** | **Cleaner text; preferred overall** |
+| `XREGA` | XR155 16 colors, EGA font | **26 seconds** | Fonts much larger |
+| `GOLDXY` | Original HPXY 16 colors, XT font | **52 seconds** | Noticeably slower |
+| `TANDY4`, `T4CGA`, `T4EGA` | Original four-color Tandy font options | Not timed | All load quickly and feel responsive; EGA font larger |
+
+These were reported directly by the owner after testing the switching build on actual V20 hardware. The **one-second difference** between FASTXY and XRCGA is too small to establish a real speed difference without repeats, while the **CGA font readability improvement** is a convincing subjective benefit. XR155+XT is about 55.8% less elapsed Calculator loading time than original HPXY+XT; XR155+CGA is about 53.8% less.
+
+**Preferred next performance/default candidate:** XR155 + CGA font family, with 640x256 panning and the exact original three-strip Program Manager, games, mouse and Windows boot logo. Do not overwrite or edit the previously hardware-verified gold-standard CF release. Keep the four-color Tandy/CGA alternative available via `T4CGA`. No universal speed claim is made for all programs; no formal benchmark suite was performed.
+
+This owner's hardware feedback supersedes the original "pending physical font test" status below. The fixed DOS-switch image was reported usable for this profile testing; individual `FC /B` command output has not been independently observed.
 
 ## Important correction, November 6, 2026: DOS profile switch failure
 
