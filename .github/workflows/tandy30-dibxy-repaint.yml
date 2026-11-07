@@ -134,7 +134,6 @@ jobs:
           a=Fat16(bytearray(Path('package/TANDY1000EX_WIN30_XRCGA_DIB_SPEEDTEST_CF.img').read_bytes()))
           b=Fat16(bytearray(Path('package/TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img').read_bytes()))
           assert len(a.b)==len(b.b)==31808*512
-          assert a.b[:a.part]==b.b[:newpart] if False else True
           assert a.b[:a.part]==b.b[:b.part], 'Boot MBR or partition changed'
           fatlen=struct.unpack_from('<H',b.b,b.part+22)[0]*512
           assert b.b[b.fat:b.fat+fatlen]==b.b[b.fat+fatlen:b.fat+2*fatlen], 'FAT mirror mismatch'
