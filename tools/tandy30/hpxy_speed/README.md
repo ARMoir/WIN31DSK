@@ -1,6 +1,6 @@
 # Tandy 1000 EX: faster HPXY drawing, XR155 A/B driver experiment
 
-**Status (November 6, 2026):** exact upstream XR155 native driver bytes reproduced, 8086/8088 build/instruction audit passed, full gold-standard CF image byte-preservation checked. **Physical EX drawing speed and compatibility have not been measured on this candidate.**
+**Status (November 6, 2026):** exact upstream XR155 native driver bytes reproduced, 8086/8088 build/instruction audit passed, full gold-standard CF image byte-preservation checked. **Owner reported XR155 works well on the actual Tandy 1000 EX.** This confirms a successful initial physical-hardware use report, but does not establish a measured drawing-speed advantage, exhaustive app compatibility, or all panning-control behaviors. The original HPXY gold-standard release remains the fallback baseline.
 
 ## Download
 
