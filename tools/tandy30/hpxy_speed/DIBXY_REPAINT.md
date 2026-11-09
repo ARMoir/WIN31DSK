@@ -1,6 +1,14 @@
 # Tandy 1000 EX Windows 3.0: DIBXY default plus experimental text repaint
 
-**November 6, 2026. Status: compiled and static-verified, hardware testing pending for RPAINT.** The owner already reported that **DIBXY** ran on the physical Tandy 1000 EX, with Program Manager loading in 58 seconds, Calculator in 24 seconds, and a more responsive overall feeling than earlier 16-color configurations. This image changes the default to that previously tested DIBXY driver and adds a separately selectable experimental text-repaint renderer.
+**Status, November 9, 2026: compiled and static-verified; initial real-hardware Program Manager startup measurement reported for REPIX, further repaint correctness and responsiveness testing pending.** The owner already reported that **DIBXY** ran on the physical Tandy 1000 EX, with Program Manager loading in 58 seconds, Calculator in 24 seconds, and a more responsive overall feeling than earlier 16-color configurations. This image changes the default to that previously tested DIBXY driver and adds a separately selectable experimental text-repaint renderer.
+
+## Initial REPIX physical-hardware result (November 9, 2026)
+
+The owner tested `REPIX` (the new `RPAINT.DRV` text-clip repaint candidate) on the physical Tandy 1000 EX and reported **Program Manager ready in 1:11 (71 seconds)**. The prior `DIBXY` Program Manager measurement was **58 seconds**, a 13-second increase (about 22% longer elapsed startup time). These are observations from separate runs, not a controlled benchmark, and do not prove that REPIX has higher redraw latency.
+
+This optimization was designed to reduce conversions for certain *clipped text repaint operations*, not general Windows startup. No REPIX Calculator result, artifact report or subjective interaction assessment has yet been reported. **Keep `DIBXY` as the default**; `REPIX` remains experimental and reversible from the DOS prompt. Useful checks are scrolling Notepad, uncovering text behind windows and checking for stale glyphs or cursor artifacts. Avoid promoting REPIX until there is a measurable or visible interactive benefit without correctness regressions.
+
+The [November 9 verification rebuild](https://github.com/ARMoir/WIN31DSK/actions/runs/42716985298) passed and confirmed file-by-file identical contents to the [November 6 release](https://github.com/ARMoir/WIN31DSK/releases/tag/tandy1000ex-win30-dibxy-default-repaint-2026-11-06), although the raw CF disk hash can differ due to FAT metadata and timestamps.
 
 ## Exact verified release
 
