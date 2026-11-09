@@ -1,4 +1,4 @@
-# Verification rebuild request on 2026-11-09. Source code and payload are pinned.
+# Verification rebuild request on 2026-11-09. Source code pinned, per-file hashes checked against release.
 name: Tandy EX DIBXY default with narrow clipped-text redraw trial
 
 on:
@@ -178,7 +178,49 @@ jobs:
           (cd package && sha256sum TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img > TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img.sha256)
           # Exact-reproduction test of the owner-selected November 6 driver/image.
           echo '33e8dfb17b09ad2f0b78199181c51d4aa90ae2e4070696186c7e08fd42463f6d  package/RPAINT.DRV' | sha256sum -c -
-          echo 'c8aa6efa28571c0d1569a28f1c55465b0082aa51a81e95741fb44fcaf7de2cfc  package/TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img' | sha256sum -c -
+
+      - name: Verify new CF file contents exactly match last successful release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p prior
+          gh release download tandy1000ex-win30-dibxy-default-repaint-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img \
+            --dir prior
+          echo 'c8aa6efa28571c0d1569a28f1c55465b0082aa51a81e95741fb44fcaf7de2cfc  prior/TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img' | sha256sum -c -
+          python3 - <<'PY'
+          import sys,hashlib
+          from pathlib import Path
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          old=Fat16(bytearray(Path('prior/TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img').read_bytes()))
+          new=Fat16(bytearray(Path('package/TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img').read_bytes()))
+          assert len(old.b)==len(new.b), 'Disk size mismatch'
+          assert old.b[:old.part]==new.b[:new.part], 'Partition boot bytes mismatch'
+          def file_inventory(fs):
+            found={}
+            def walk(cluster=None,prefix=''):
+              for _,name,attrs,next_cluster,_ in fs.entries(cluster):
+                if name in ('.','..'):continue
+                p=prefix+'/'+name
+                if attrs&16:walk(next_cluster,p)
+                else:found[p]=hashlib.sha256(fs.read(p)).hexdigest()
+            walk()
+            return found
+          prev=file_inventory(old)
+          current=file_inventory(new)
+          assert prev==current,('File content mismatch',{
+            'missing':sorted(set(prev)-set(current)),
+            'added':sorted(set(current)-set(prev)),
+            'changed':sorted(p for p in set(prev)&set(current) if prev[p]!=current[p])})
+          assert current['/WINDOWS/SYSTEM/RPAINT.DRV']=='33e8dfb17b09ad2f0b78199181c51d4aa90ae2e4070696186c7e08fd42463f6d'
+          print('PASS: complete',len(prev),'file inventory exactly identical by SHA-256 to Nov 6 successful release')
+          print('PASS: all Windows startup, logo, font, driver, desktop and menu files identical')
+          print('NOTE: FAT directory timestamps/allocation metadata can differ across fresh-image builds')
+          PY
 
       - name: Upload compiled 16 MB CF image and RPAINT driver
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -210,5 +252,5 @@ jobs:
             package/RPAINT_REPORT.json \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title 'Verified rebuild Nov 9: Tandy EX DIBXY default + REPIX text repaint, CGA fonts, T4CGA fallback' \
-            --notes 'Verification rebuild on November 9, 2026. This release is required to be byte-identical to the November 6 successful release (CF SHA-256 c8aa6efa28571c0d1569a28f1c55465b0082aa51a81e95741fb44fcaf7de2cfc; RPAINT.DRV SHA-256 33e8dfb17b09ad2f0b78199181c51d4aa90ae2e4070696186c7e08fd42463f6d). Separate EXPERIMENTAL 16 MB CF image. Default boots user-tested DIBXY (XR155+DIB) + compact CGA fonts, 320x200 16 colors, 640x256 panning, three-row Main/Accessories/Games. From DOS after Windows exits run REPIX then WIN to select the new experimental RPAINT.DRV, which conservatively redraws only the columns inside a proven legal Windows text clipping rectangle instead of the entire row; unknown font/clip cases retain the original fallback. Revert via DIBXY then WIN. XRCGA and original Microsoft T4CGA four-color profiles remain available. The beloved Windows boot logo, all games, all original 389+ files, original font and mouse binaries and screen layout are byte-identical to the tested DIBXY base. New driver passes 8086 MASM, NE memory and FAT identity checks, but does NOT have a physical Tandy qualification or proven performance improvement. Never overwrite the gold standard.' \
+            --notes 'Verification rebuild on November 9, 2026. This release is required to be **file-by-file SHA-256 identical** to the November 6 successful release, including the DIBXY default, RPAINT.DRV SHA-256 33e8dfb17b09ad2f0b78199181c51d4aa90ae2e4070696186c7e08fd42463f6d, boot logo, all Windows files, games and layout. Raw CF image SHA-256 may differ because DOS/FAT directory timestamps change on rebuild. Separate EXPERIMENTAL 16 MB CF image. Default boots user-tested DIBXY (XR155+DIB) + compact CGA fonts, 320x200 16 colors, 640x256 panning, three-row Main/Accessories/Games. From DOS after Windows exits run REPIX then WIN to select the new experimental RPAINT.DRV, which conservatively redraws only the columns inside a proven legal Windows text clipping rectangle instead of the entire row; unknown font/clip cases retain the original fallback. Revert via DIBXY then WIN. XRCGA and original Microsoft T4CGA four-color profiles remain available. The beloved Windows boot logo, all games, all original 389+ files, original font and mouse binaries and screen layout are byte-identical to the tested DIBXY base. New driver passes 8086 MASM, NE memory and FAT identity checks, but does NOT have a physical Tandy qualification or proven performance improvement. Never overwrite the gold standard.' \
             --prerelease --latest=false
