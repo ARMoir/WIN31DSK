@@ -1,3 +1,4 @@
+# Verification rebuild request on 2026-11-09. Source code and payload are pinned.
 name: Tandy EX DIBXY default with narrow clipped-text redraw trial
 
 on:
@@ -175,6 +176,9 @@ jobs:
           print('PASS: same startup logo, three-row Program Manager, all games, fonts, serial mouse, panning and old 4-color option')
           PY
           (cd package && sha256sum TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img > TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img.sha256)
+          # Exact-reproduction test of the owner-selected November 6 driver/image.
+          echo '33e8dfb17b09ad2f0b78199181c51d4aa90ae2e4070696186c7e08fd42463f6d  package/RPAINT.DRV' | sha256sum -c -
+          echo 'c8aa6efa28571c0d1569a28f1c55465b0082aa51a81e95741fb44fcaf7de2cfc  package/TANDY1000EX_WIN30_DIBXY_DEFAULT_REPAINT_TEST_CF.img' | sha256sum -c -
 
       - name: Upload compiled 16 MB CF image and RPAINT driver
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -191,7 +195,7 @@ jobs:
       - name: Publish separate experiment, never replace gold standard or DIBXY releases
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: tandy1000ex-win30-dibxy-default-repaint-2026-11-06
+          TAG: tandy1000ex-win30-dibxy-repaint-verification-2026-11-09
         shell: bash
         run: |
           set -euo pipefail
@@ -205,6 +209,6 @@ jobs:
             package/RPAINT.DRV \
             package/RPAINT_REPORT.json \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title 'Tandy EX: DIBXY default, optional bounded text repaint, CGA fonts, four-color fallback' \
-            --notes 'Separate EXPERIMENTAL 16 MB CF image. Default boots user-tested DIBXY (XR155+DIB) + compact CGA fonts, 320x200 16 colors, 640x256 panning, three-row Main/Accessories/Games. From DOS after Windows exits run REPIX then WIN to select the new experimental RPAINT.DRV, which conservatively redraws only the columns inside a proven legal Windows text clipping rectangle instead of the entire row; unknown font/clip cases retain the original fallback. Revert via DIBXY then WIN. XRCGA and original Microsoft T4CGA four-color profiles remain available. The beloved Windows boot logo, all games, all original 389+ files, original font and mouse binaries and screen layout are byte-identical to the tested DIBXY base. New driver passes 8086 MASM, NE memory and FAT identity checks, but does NOT have a physical Tandy qualification or proven performance improvement. Never overwrite the gold standard.' \
+            --title 'Verified rebuild Nov 9: Tandy EX DIBXY default + REPIX text repaint, CGA fonts, T4CGA fallback' \
+            --notes 'Verification rebuild on November 9, 2026. This release is required to be byte-identical to the November 6 successful release (CF SHA-256 c8aa6efa28571c0d1569a28f1c55465b0082aa51a81e95741fb44fcaf7de2cfc; RPAINT.DRV SHA-256 33e8dfb17b09ad2f0b78199181c51d4aa90ae2e4070696186c7e08fd42463f6d). Separate EXPERIMENTAL 16 MB CF image. Default boots user-tested DIBXY (XR155+DIB) + compact CGA fonts, 320x200 16 colors, 640x256 panning, three-row Main/Accessories/Games. From DOS after Windows exits run REPIX then WIN to select the new experimental RPAINT.DRV, which conservatively redraws only the columns inside a proven legal Windows text clipping rectangle instead of the entire row; unknown font/clip cases retain the original fallback. Revert via DIBXY then WIN. XRCGA and original Microsoft T4CGA four-color profiles remain available. The beloved Windows boot logo, all games, all original 389+ files, original font and mouse binaries and screen layout are byte-identical to the tested DIBXY base. New driver passes 8086 MASM, NE memory and FAT identity checks, but does NOT have a physical Tandy qualification or proven performance improvement. Never overwrite the gold standard.' \
             --prerelease --latest=false
