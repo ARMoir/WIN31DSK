@@ -130,7 +130,7 @@ def make_table(variant):
         lines += ["    ; PIXMAX: pre-shifted blue/intensity contribution table.",
                   "pix_lut_bi label word"]
         for j in range(0,256,8):
-            lines.append("    dw "+",".join("%04xh"%(v<<2) for v in words[j:j+8]))
+            lines.append("    dw "+",".join("0%04xh"%(v<<2) for v in words[j:j+8]))
     return "\r\n".join(lines)+"\r\n"
 
 def patch(renderer,variant):
