@@ -2,7 +2,7 @@
 
 **Build date:** November 10, 2026
 
-**Experimental hardware validation pending.** All three new Windows 3.0 drivers passed the native 16-bit build, palette/reference and image-preservation checks. These checks do **not** establish a performance advantage or guarantee a correct physical-Tandy display session.
+**Initial physical NEC V20 timings reported November 10, 2026.** The owner tested PIXFAST, PIXBURST, PIXV20 and PIXDIRTY, recording both Program Manager and Calculator timings. These are preliminary single-run measurements; screen colors, panning and long-term stability of each experimental driver have not yet been individually confirmed. Compilation and reference-image tests alone are not sufficient to qualify a new default.
 
 ## The new experimental CF card
 
@@ -14,6 +14,22 @@
 **Default stays owner-tested color-corrected PIXMAX:** 16 colors, compact CGA fonts, 320×200 hardware viewport on 640×256 pannable desktop, original three-row Main/Accessories/Games layout, all applications, boot splash/logo and original Windows 1.0 serial mouse driver. PIXMAX previously achieved Calculator startup in **18.8 seconds** on the user's physical NEC V20. No corrected-PIXMAX Program Manager time is on record.
 
 **File-integrity audit:** All 426 original image files passed SHA256 identity; exactly nine optional files were added: three Windows display drivers, three DOS profile snapshots in `C:\TANDY88`, and three DOS selector BATs in `C:\`. The protected original gold-standard release and the corrected PIXMAX-default release have not been changed.
+
+## November 10, 2026: actual NEC V20 comparison (owner-provided photo of stopwatch notes)
+
+The phone screenshot lists each driver followed by a Program Manager time and Calculator time. "Fast" is interpreted as the PIXFAST selector. It also shows a standalone **54** before the "Fast" label, without its associated driver or task visible. **Do not assign that 54 seconds to PIXMAX or any particular workload.**
+
+| Driver | Program Manager startup | Calculator startup | Notes |
+| --- | ---: | ---: | --- |
+| PIXFAST | 58 sec | **21 sec** | Tied fastest Calculator among these four |
+| PIXBURST | 59 sec | **21 sec** | Tied fastest Calculator among these four |
+| PIXV20 | **57 sec** | 23 sec | Fastest Program Manager among these four |
+| PIXDIRTY | 59 sec | 22 sec | No measurable improvement relative to PIXFAST/BURST in these samples |
+| **Corrected PIXMAX baseline, earlier separate test** | Not confirmed for corrected build | **18.8 sec** | Remains fastest recorded Calculator time overall |
+
+**Interpretation:** PIXBURST does **not** uniquely win the Calculator test. It ties PIXFAST at 21 seconds, and both trail the earlier color-corrected PIXMAX's 18.8-second measurement. PIXV20 leads Program Manager startup by one second relative to PIXFAST. These small differences might be run-to-run noise until repeated. Do not promote any new experiment as the default based on these numbers. Maintain correct-color PIXMAX as the standard.
+
+**Next action after checking visual correctness and repeatability:** test 4/8/16 KiB lookup variants and memory-for-speed tradeoffs under the newly approved **192 KiB (196,608-byte) experimental NE minimum-allocation ceiling**. Keep each table-size experiment independent and avoid changing the default until it wins a real-hardware comparison.
 
 ## Try all three, no repeated flashing
 
@@ -52,6 +68,6 @@ If a driver makes Windows unusable, restart the Tandy and type the same two comm
 - [CF preservation packer](https://github.com/ARMoir/WIN31DSK/blob/tandy16-rendering-performance/tools/tandy30/hpxy_speed/pack_pixtrials.py)
 - [Reproducible GitHub Actions workflow](https://github.com/ARMoir/WIN31DSK/blob/tandy16-rendering-performance/.github/workflows/tandy30-triple-turbo.yml)
 
-Original build-validated driver sizes: **PIXBURST 62,272 bytes, PIXV20 61,952 bytes, PIXDIRTY 62,000 bytes**. The minimum native Windows NE allocations remain inside the prior conservative 127,531-byte project budget for all three. Native code has not yet been hardware-tested.
+Original build-validated driver sizes: **PIXBURST 62,272 bytes, PIXV20 61,952 bytes, PIXDIRTY 62,000 bytes**. The minimum native Windows NE allocations fit within the prior conservative 127,531-byte project budget for all three. The memory ceiling has since been raised to **192 KiB for new experiments**; that is a build allowance, not proof of additional usable conventional RAM. Initial actual V20 timings are documented above.
 
 **Do not promote a trial as default just because it builds.** The known-good color-corrected PIXMAX stays the first-run profile and original gold release is preserved.
