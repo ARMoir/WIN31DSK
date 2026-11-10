@@ -1,4 +1,5 @@
-name: Tandy EX RGBI lookup turbo showdown - DIBXY vs PIXFAST vs PIXMAX
+# November 10 RGBI red/blue correction. Never overwrite the original experimental release.
+name: Tandy EX PIXFAST PIXMAX color-corrected RGBI showdown
 
 on:
   push:
@@ -94,7 +95,7 @@ jobs:
             --dir package
           echo 'adca85db75d58d33238d4e39fdd1138180776c77fd16d8b322c796159aefcb8c  package/TANDY1000EX_WIN30_XRCGA_DIB_SPEEDTEST_CF.img' | sha256sum -c -
           cp package/TANDY1000EX_WIN30_XRCGA_DIB_SPEEDTEST_CF.img \
-            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img
+            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img
 
       - name: Install two opt-in turbo 16-color drivers; set DIBXY known-good default
         shell: bash
@@ -103,7 +104,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import subprocess,hashlib,json
-          img='package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img@@32256'
+          img='package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img@@32256'
           def read(path):
               f=Path('package')/('get_'+path.replace('/','_'))
               if f.exists():f.unlink()
@@ -147,7 +148,7 @@ jobs:
           sys.path.insert(0,'tools/tandy30/int33-test')
           from fat16_image import Fat16
           f='package/TANDY1000EX_WIN30_XRCGA_DIB_SPEEDTEST_CF.img'
-          g='package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img'
+          g='package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img'
           original=Fat16(bytearray(Path(f).read_bytes()))
           image=Fat16(bytearray(Path(g).read_bytes()))
           assert len(original.b)==len(image.b)==31808*512
@@ -194,15 +195,15 @@ jobs:
           print('PASS',len(old),'original files: only active SYSTEM.INI to DIBXY, six new turbo files')
           print('PASS authentic logo, three-row UI, panning, mouse, games, CGA fonts, original T4CGA and DIBXY')
           PY
-          (cd package && sha256sum TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img > TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img.sha256)
+          (cd package && sha256sum TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img > TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img.sha256)
 
       - name: Upload independent binary drivers and complete bootable 16 MB CF image
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: Tandy_DIBXY_PIXFAST_PIXMAX_AllOut_Speed_Test
           path: |
-            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img
-            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img.sha256
+            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img
+            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img.sha256
             package/PIXFAST.DRV
             package/PIXFAST_REPORT.json
             package/PIXMAX.DRV
@@ -213,7 +214,7 @@ jobs:
       - name: Publish versioned experimental release without modifying working images
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: tandy1000ex-win30-dibxy-pixfast-pixmax-2026-11-09
+          TAG: tandy1000ex-win30-dibxy-pixfast-pixmax-colorfix-2026-11-10
         shell: bash
         run: |
           set -euo pipefail
@@ -222,11 +223,11 @@ jobs:
             exit 0
           fi
           gh release create "$TAG" \
-            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img \
-            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img.sha256 \
+            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img \
+            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img.sha256 \
             package/PIXFAST.DRV package/PIXFAST_REPORT.json \
             package/PIXMAX.DRV package/PIXMAX_REPORT.json \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title 'ALL-OUT Tandy EX 16-color PIXFAST and PIXMAX RGBI lookup speed showdown' \
-            --notes 'Separate EXPERIMENTAL CF image, based on the known-good DIBXY 16-color driver (default) and compact CGA fonts. PIXFAST replaces 8 repeated bit-transpose pixels with two word stores using a 512-byte CS lookup table; PIXMAX instead uses two lookup tables (1024 bytes) to remove more shifts. Both preserve original 320x200 viewport, 640x256 logical panning, color mapping, cursor, Windows boot logo, games, protected WIN.BAT, Main/Accessories/Games three-row layout, serial mouse and T4CGA four-color option. Exit Windows to DOS and run PIXFAST then WIN, or PIXMAX then WIN. Run DIBXY then WIN to return to original. Python 65536 exhaustive and 250000 randomized RGBI pixel oracle tests, MASM 8086 checks, NE budget and byte-preservation audits all required to pass. This is aggressive experimental conversion, NOT YET qualified on physical Tandy: test correctness before deciding if speed actually improved.' \
+            --title 'COLOR FIX: Tandy EX PIXFAST + PIXMAX 16-color speed showdown, original I-R-G-B plane order' \
+            --notes 'CORRECTED November 10 experimental CF image. Supersedes the November 9 PIXFAST/PIXMAX test release which swapped red and blue planes in its lookup converter. Critical fix: exactly match original get_nibble intensity, red, green, blue SHL/RCL bit sequence, verified with an independent one-hot R and B regression plus exhaustive and randomized oracle. The original DIBXY driver and visual appearance are restored, with turbo lookup speed path preserved. Based on the known-good DIBXY 16-color driver (default) and compact CGA fonts. PIXFAST replaces 8 repeated bit-transpose pixels with two word stores using a 512-byte CS lookup table; PIXMAX instead uses two lookup tables (1024 bytes) to remove more shifts. Both preserve original 320x200 viewport, 640x256 logical panning, color mapping, cursor, Windows boot logo, games, protected WIN.BAT, Main/Accessories/Games three-row layout, serial mouse and T4CGA four-color option. Exit Windows to DOS and run PIXFAST then WIN, or PIXMAX then WIN. Run DIBXY then WIN to return to original. Independent baseline assembly I-R-G-B one-hot R/B tests, Python 65536 exhaustive and 250000 randomized RGBI pixel oracle tests, MASM 8086 checks, NE budget and byte-preservation audits all required to pass. This is aggressive experimental conversion, NOT YET qualified on physical Tandy: test correctness before deciding if speed actually improved.' \
             --prerelease --latest=false
