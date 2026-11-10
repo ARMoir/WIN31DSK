@@ -1,0 +1,153 @@
+name: Tandy EX default corrected PIXMAX (DIBXY and T4CGA retained)
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-pixmax-default.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pixmax-default:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MS-DOS FAT16 utilities
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Retrieve exact already-built color-fixed PIXMAX card
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source output
+          gh release download tandy1000ex-win30-dibxy-pixfast-pixmax-colorfix-2026-11-10 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img \
+            --dir source
+          echo 'b450250f5553116f248632d5ab7b988d65b18ced6237640548ca0afb35714b10  source/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img' | sha256sum -c -
+          cp source/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img \
+            output/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img
+
+      - name: Select tested color-fixed PIXMAX for default boot, preserving all other files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess,hashlib
+          source=Path('source/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img')
+          image=Path('output/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img')
+          def get(path,src=image):
+            target=Path('output')/('read_'+path.replace('/','_'))
+            if target.exists():target.unlink()
+            subprocess.run(['mcopy','-i',str(src)+'@@32256','::/'+path,str(target)],check=True)
+            return target.read_bytes()
+          def put(path,data):
+            target=Path('output')/('write_'+path.replace('/','_'))
+            target.write_bytes(data)
+            subprocess.run(['mcopy','-o','-i',str(image)+'@@32256',str(target),'::/'+path],check=True)
+            assert get(path)==data,('Failed write',path)
+          before=get('WINDOWS/SYSTEM.INI',source)
+          assert before==get('TANDY88/XDIB.INI'), 'Initial card was not preserved baseline DIBXY'
+          selected=get('TANDY88/PIXMAX.INI')
+          assert selected.count(b'display.drv=PIXMAX.DRV')==1
+          assert b'fonts.fon=CGASYS.FON' in selected
+          assert b'mouse.drv=msmouse1.drv' in selected.lower()
+          drv=get('WINDOWS/SYSTEM/PIXMAX.DRV')
+          assert hashlib.sha256(drv).hexdigest()=='cb635f55688fc1ca4fd284eacc63c009160d46996ce844d4cf0510799018959c'
+          assert get('DIBXY.BAT',source)==get('DIBXY.BAT'), 'Restore script missing'
+          assert get('T4CGA.BAT',source)==get('T4CGA.BAT'), '4-color fallback missing'
+          put('WINDOWS/SYSTEM.INI',selected)
+          print('PASS: PIXMAX I-R-G-B color-corrected driver selected at boot; DIBXY, T4CGA restore retained')
+          PY
+
+      - name: Verify unchanged original files, windows logo, mouse, panning and FAT
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys,hashlib,struct
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          src=Fat16(bytearray(Path('source/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_RGBFIX_CF.img').read_bytes()))
+          new=Fat16(bytearray(Path('output/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img').read_bytes()))
+          assert len(src.b)==len(new.b)==31808*512
+          assert src.b[:src.part]==new.b[:new.part], 'MBR and partition boot changed'
+          assert src.part==new.part
+          fatlen=struct.unpack_from('<H',new.b,new.part+22)[0]*512
+          assert new.b[new.fat:new.fat+fatlen]==new.b[new.fat+fatlen:new.fat+2*fatlen], 'FAT mirrors differ'
+          def inventory(fs):
+            result={}
+            def gather(start=None,prefix=''):
+              for _,name,attr,cl,_ in fs.entries(start):
+                if name in ('.','..'):continue
+                p=prefix+'/'+name
+                if attr&16:gather(cl,p)
+                else:result[p]=hashlib.sha256(fs.read(p)).hexdigest()
+            gather();return result
+          a,b=inventory(src),inventory(new)
+          assert set(a)==set(b),(set(a)-set(b),set(b)-set(a))
+          assert {p for p in a if a[p]!=b[p]}=={'/WINDOWS/SYSTEM.INI'},'Unexpected file changed'
+          assert new.read('/WINDOWS/SYSTEM.INI')==new.read('/TANDY88/PIXMAX.INI')
+          assert new.read('/WINDOWS/SYSTEM/PIXMAX.DRV')==src.read('/WINDOWS/SYSTEM/PIXMAX.DRV')
+          assert hashlib.sha256(new.read('/WINDOWS/SYSTEM/PIXMAX.DRV')).hexdigest()=='cb635f55688fc1ca4fd284eacc63c009160d46996ce844d4cf0510799018959c'
+          assert new.read('/WINDOWS/PROGMAN.INI')==src.read('/WINDOWS/PROGMAN.INI')
+          assert new.read('/WINDOWS/WIN.INI')==src.read('/WINDOWS/WIN.INI')
+          for p in ('/WINDOWS/MAIN.GRP','/WINDOWS/ACCESSOR.GRP','/WINDOWS/GAMES.GRP',
+                    '/WINDOWS/SYSTEM/MSMOUSE1.DRV','/WINDOWS/SYSTEM/CGASYS.FON',
+                    '/WINDOWS/SYSTEM/XDIB.DRV','/WINDOWS/SYSTEM/XR155.DRV',
+                    '/WINDOWS/SYSTEM/TANDYDSP.DRV','/DIBXY.BAT','/T4CGA.BAT',
+                    '/GOLDXY.BAT','/PIXMAX.BAT','/PIXFAST.BAT','/WIN.BAT',
+                    '/AUTOEXEC.BAT','/CONFIG.SYS','/WINDOWS/PAN.EXE',
+                    '/TANDY88/PM16.INI','/TANDY88/PM4.INI'):
+            assert src.read(p)==new.read(p),p
+          for p in a:
+            if any(p.endswith(ext) for ext in ('.EXE','.COM','.DRV','.FON','.GRP','.BMP','.WAV','.BAT')) or 'LOGO' in p.upper() or 'SPLASH' in p.upper():
+              assert a[p]==b[p],p
+          assert b'RESERVE.COM' in new.read('/WIN.BAT').upper()
+          assert b'WIN.COM /R' in new.read('/WIN.BAT').upper()
+          assert b'load=C:\\WINDOWS\\PAN.EXE' in new.read('/WINDOWS/WIN.INI')
+          print('PASS:',len(a),'files present with exact SHA256 match except active WINDOWS/SYSTEM.INI')
+          print('PASS: original boot logo, fonts, three-row groups, DOS launcher, mouse, panning, games and four-color switch unchanged')
+          print('PASS: known-good DIBXY driver still installed as reversible fallback')
+          PY
+          (cd output && sha256sum TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img > TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img.sha256)
+
+      - name: Attach 16 MB bootable CF and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_EX_PIXMAX_Default_ColorFixed_RGBI
+          path: |
+            output/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img
+            output/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish separately tagged corrected PIXMAX default without overwriting gold
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-pixmax-default-colorfix-2026-11-10
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Already released: never overwrite tested images'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img \
+            output/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img.sha256 \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title 'Tandy 1000 EX: corrected PIXMAX as default, DIBXY rollback and T4CGA four-color option' \
+            --notes 'This release starts in the owner-tested, COLOR-CORRECTED PIXMAX dual-table 16-color display driver with compact CGA fonts, original 320x200 viewport of 640x256 pannable desktop, BorderWidth=2, original Windows boot logo, unchanged three-row Main/Accessories/Games and serial mouse. Physical Tandy owner measured 18.8-second Calculator startup on PIXMAX RGBFIX and confirmed original colors were restored. From DOS type WIN to launch PIXMAX. To restore DIBXY, exit Windows then type DIBXY and WIN. T4CGA then WIN selects original four-color Tandy display and its wider Program Manager layout. PIXFAST and XRCGA also remain available. This 16 MB image was produced from the checksum-pinned corrected PIXMAX release, changing ONLY WINDOWS/SYSTEM.INI. The original working CF releases, protected gold standard, all games, all fonts, boot logo, mouse drivers, panning and original files are untouched. No claim of further speed gain beyond measured 18.8s Calculator is made.' \
+            --prerelease --latest=false
