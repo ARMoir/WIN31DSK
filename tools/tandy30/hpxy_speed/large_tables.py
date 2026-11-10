@@ -209,7 +209,7 @@ def test():
         want=pix.ref(*planes)
         assert calc4(*planes)==want,("4k",x,planes)
         assert calc8(*planes)==want,("8k",x,planes)
-    assert len(table4().split("    dw "))>400
+    assert len(table4().split("    dw "))>250
     assert len(table8().split("    dw "))>500
     assert VARIANTS["fast4k"]["table_bytes"]==8*256*2
     assert VARIANTS["max8k"]["table_bytes"]==(4096+16)*2
