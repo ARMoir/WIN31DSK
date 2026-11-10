@@ -70,7 +70,11 @@ def main():
         report=json.loads((a.package/(name+"_REPORT.json")).read_text())
         assert report["experimental_patch"]["variant"]==mode
         assert sha(driver)==report["sha256"]
-        assert report["ne_gross_alloc_bytes"]<=130000
+        assert report["ne_gross_alloc_bytes"]<=192*1024
+        assert report["experimental_ne_budget"]==192*1024
+        assert report["experimental_ne_budget_kib"]==192
+        assert sum(seg["minimum_bytes"] for seg in report["ne_segment_allocations"])==report["ne_gross_alloc_bytes"]
+        assert max(seg["minimum_bytes"] for seg in report["ne_segment_allocations"])<=65536
         if mode=="v20":
             assert report["V20_only_opcode_audit"]["shr_bl_4"]>=2
             assert report["V20_only_opcode_audit"]["shl_al_4"]>=2
