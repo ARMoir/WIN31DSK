@@ -52,8 +52,10 @@ def ref(r,g,b,intensity):
         result.append((vals[0]<<4)|vals[1])
     return bytes(result)
 
+LOOKUP=[pack(i&15,i>>4) for i in range(256)]
+
 def calculated(r,g,b,intensity):
-    lut=[pack(i&15,i>>4) for i in range(256)]
+    lut=LOOKUP
     out=[]
     for shift in (4,0):
         rg=lut[((r>>shift)&15)|(((g>>shift)&15)<<4)]
