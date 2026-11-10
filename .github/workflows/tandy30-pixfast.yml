@@ -70,7 +70,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/tandy30/hpxy_speed/build_pixfast.py view /usr/bin/dosbox-x build-max max
+          if ! python3 tools/tandy30/hpxy_speed/build_pixfast.py view /usr/bin/dosbox-x build-max max; then
+            echo '--- MASM LOG ---'
+            tail -130 build-max/renderer/EGA/BUILD0.LOG || true
+            echo '--- LINK LOG ---'
+            tail -80 build-max/renderer/EGA/LINK.LOG || true
+            echo '--- XR155 STAGE ---'
+            tail -45 build-max/core-host.log || true
+            exit 1
+          fi
           cp build-max/PIXMAX.DRV build-max/PIXMAX_REPORT.json package/
           sha256sum package/PIXMAX.DRV
 
