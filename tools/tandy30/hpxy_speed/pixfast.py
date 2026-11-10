@@ -34,23 +34,31 @@ ORIGINAL = """xyc_group:
 
 def pack(r,g):
     # For four pixels: p0/p1 in low byte, p2/p3 in high byte.
-    # Source bits 3,2,1,0 are left-to-right; red = RGBI bit0,
-    # green = bit1. A 16-bit MOV to ES:DI writes them in this order.
+    # Source bits 3,2,1,0 are left-to-right. The first input is the
+    # LOW bit of this contribution and the second is the next bit.
+    # For the ORIGINAL get_nibble order: blue+green (low 2),
+    # red+intensity (high 2). Do not confuse this with RGBI names.
     p=[((r>>bit)&1) | (((g>>bit)&1)<<1) for bit in (3,2,1,0)]
     return (p[0]<<4)|p[1]|(p[2]<<12)|(p[3]<<8)
 
 def ref(r,g,b,intensity):
-    result=[]
-    for n in range(0,8,2):
-        vals=[]
-        for pixel in (n,n+1):
-            bit=7-pixel
-            vals.append(( ((intensity>>bit)&1)<<3 )
-                       |( ((b>>bit)&1)<<2 )
-                       |( ((g>>bit)&1)<<1 )
-                       |  ((r>>bit)&1))
-        result.append((vals[0]<<4)|vals[1])
-    return bytes(result)
+    """Independent bit-serial oracle for ORIGINAL get_nibble assembly.
+
+    Original code: xor al,al; shl dh / rcl al; shl ah / rcl al;
+    shl bl / rcl al; shl bh / rcl al. AX shadow loads:
+    AH=[si] RED, BL=[si+80] GREEN, BH=[si+160] BLUE,
+    DH=[si+240] INTENSITY. Final 4 bits are I R G B, NOT I B G R.
+    """
+    out=[]
+    for p in range(0,8,2):
+        pixels=[]
+        for n in (p,p+1):
+            v=0
+            for plane in (intensity,r,g,b):  # exact original SHL/RCL sequence
+                v=(v<<1)|((plane>>(7-n))&1)
+            pixels.append(v)
+        out.append((pixels[0]<<4)|pixels[1])
+    return bytes(out)
 
 LOOKUP=[pack(i&15,i>>4) for i in range(256)]
 
@@ -58,15 +66,31 @@ def calculated(r,g,b,intensity):
     lut=LOOKUP
     out=[]
     for shift in (4,0):
-        rg=lut[((r>>shift)&15)|(((g>>shift)&15)<<4)]
-        bi=lut[((b>>shift)&15)|(((intensity>>shift)&15)<<4)]
-        word=rg | (bi<<2)
+        # FIX: original physical Tandy converter packs I R G B.
+        # Source low contributions are B(bit0), G(bit1);
+        # high contributions are R(bit2), I(bit3).
+        bg=lut[((b>>shift)&15)|(((g>>shift)&15)<<4)]
+        ri=lut[((r>>shift)&15)|(((intensity>>shift)&15)<<4)]
+        word=bg | (ri<<2)
         out += [word&255,word>>8]
     return bytes(out)
 
 def test():
     import random
     assert len(set(pack(r,g) for r in range(16) for g in range(16)))==256
+    # Explicit guard against the bug in the first PIXMAX public release.
+    # Previous tests replicated the SAME erroneous I B G R bit mapping
+    # and therefore passed even though the video colors were swapped.
+    for plane,expected in ((0,4),(1,2),(2,1),(3,8)):
+        channels=[0,0,0,0]
+        channels[plane]=255
+        expected_bytes=bytes([expected*17]*4)
+        assert ref(*channels)==expected_bytes, (plane,"baseline",ref(*channels))
+        assert calculated(*channels)==expected_bytes, (plane,"converter",calculated(*channels))
+    # Distinguish red-vs-blue explicitly for alternating patterns.
+    assert calculated(0xAA,0,0,0)==ref(0xAA,0,0,0)
+    assert calculated(0,0,0x55,0)==ref(0,0,0x55,0)
+    assert calculated(0xAA,0,0,0)!=calculated(0,0,0xAA,0)
     # Exhaustive four-pixel color plane combinations, all 65,536.
     for red in range(16):
       for green in range(16):
@@ -82,11 +106,11 @@ def test():
     for col in range(16):
         v=calculated(*[(255 if (col & (1<<p)) else 0) for p in range(4)])
         assert v==bytes([(col<<4)|col]*4)
-    print("PASS 65536 exhaustive 4-pixel combinations, 250000 randomized groups, all 16 solid RGBI colors")
+    print("PASS independent original assembly I-R-G-B oracle, red/blue one-hot regressions, 65536 exhaustive combinations, 250000 randomized groups, all 16 colors")
 
 def nibble_index(plane,other,half):
-    # Create a byte: high nibble of green or intensity; low nibble
-    # of red or blue. Preserve CX (the outer 8-pixel-group count).
+    # Create index: low nibble from blue or red plane, high nibble
+    # from green or intensity plane; preserve outer CX count.
     lines=["    mov bl,[si+%d]"%plane]
     if half=="hi":
         lines += ["    shr bl,1"]*4
@@ -103,19 +127,20 @@ def make_group(variant):
     result=[
         "xyc_group:",
         "    ; PIX%s: 8 packed RGBI pixels per 4 planar bytes; 2 STOSW."%variant.upper(),
+        "    ; Exact baseline get_nibble order: DH(I), AH(R), BL(G), BH(B).",
         "    ; CS table reads keep DS pointing at the original shadow band.",
-        "    ; DX = low-color pair, AX = high-color pair; CX/SI preserved.",
+        "    ; DX = blue+green, AX = red+intensity; CX/SI preserved.",
     ]
     for half in ("hi","lo"):
         result += ["    ; "+half+" four-pixel half"]
-        result += nibble_index(0,80,half)
-        result += ["    mov dx,word ptr cs:pix_lut_rg[bx]"]
-        result += nibble_index(160,240,half)
+        result += nibble_index(160,80,half)
+        result += ["    mov dx,word ptr cs:pix_lut_pair[bx]"]
+        result += nibble_index(0,240,half)
         if variant=="fast":
-            result += ["    mov ax,word ptr cs:pix_lut_rg[bx]",
+            result += ["    mov ax,word ptr cs:pix_lut_pair[bx]",
                        "    shl ax,1","    shl ax,1"]
         else:
-            result += ["    mov ax,word ptr cs:pix_lut_bi[bx]"]
+            result += ["    mov ax,word ptr cs:pix_lut_pair_hi[bx]"]
         result += ["    or ax,dx","    stosw"]
     return "\r\n".join(result)+"\r\n"
 
@@ -123,12 +148,12 @@ def make_table(variant):
     words=[pack(i&15,i>>4) for i in range(256)]
     lines=["    ; 256 lookup entries: nibble-pair to packed 4-pixel RGBI word.",
            "    ; Memory byte order = p0,p1,p2,p3, compatible with STOSW.",
-           "pix_lut_rg label word"]
+           "pix_lut_pair label word"]
     for j in range(0,256,8):
         lines.append("    dw "+",".join("%04xh"%v for v in words[j:j+8]))
     if variant=="max":
-        lines += ["    ; PIXMAX: pre-shifted blue/intensity contribution table.",
-                  "pix_lut_bi label word"]
+        lines += ["    ; PIXMAX: pre-shifted RED/INTENSITY contribution table.",
+                  "pix_lut_pair_hi label word"]
         for j in range(0,256,8):
             lines.append("    dw "+",".join("0%04xh"%(v<<2) for v in words[j:j+8]))
     return "\r\n".join(lines)+"\r\n"
