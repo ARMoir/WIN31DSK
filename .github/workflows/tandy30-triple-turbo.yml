@@ -81,8 +81,8 @@ jobs:
               v20) name=PIXV20 ;;
               dirty) name=PIXDIRTY ;;
             esac
-            cp "build-$mode/$name.DRV" "build-$mode/$name_REPORT.json" package/
-            sha256sum "package/$name.DRV"
+            cp "build-$mode/${name}.DRV" "build-$mode/${name}_REPORT.json" package/
+            sha256sum "package/${name}.DRV"
             echo "::endgroup::"
           done
 
