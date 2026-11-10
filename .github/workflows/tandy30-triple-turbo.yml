@@ -130,7 +130,8 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo 'Existing released image never overwritten'
+            echo 'Release already published with verified assets; keep the existing image immutable'
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
             exit 0
           fi
           gh release create "$TAG" \
@@ -141,5 +142,5 @@ jobs:
             package/PIXDIRTY.DRV package/PIXDIRTY_REPORT.json \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title 'ALL OUT: Tandy EX PIXMAX + three optional turbo engines, burst / V20 / dirty' \
-            --notes 'Experimental comparison from the owner-verified color-correct PIXMAX default Windows 3.0 image. At DOS (after exiting Windows) run PIXBURST then WIN for two-group unrolling and skip per-group bank wrap when safe; PIXV20 then WIN for NEC V20-only 80186 immediate-count shifts (do not run on stock Intel 8088/8086); PIXDIRTY then WIN to skip matching 16-bit video words after B800h reads. Restore known-good with PIXMAX then WIN, DIBXY then WIN or four-color original with T4CGA then WIN. All original files and the Windows boot logo, mouse, fonts, 16-color panning, three-row groups and old releases are unchanged. Exactly 9 opt-in files added. Compilers, memory limits, bit-order oracle and simulated video-write regression tests pass. Performance or physical graphics correctness of these three experimental drivers is NOT yet confirmed; the dirty comparison could be slower than straight writes. Do not call any new experiment the default until tested on real V20.'
+            --notes 'Experimental comparison from the owner-verified color-correct PIXMAX default Windows 3.0 image. At DOS (after exiting Windows) run PIXBURST then WIN for two-group unrolling and skip per-group bank wrap when safe; PIXV20 then WIN for NEC V20-only 80186 immediate-count shifts (do not run on stock Intel 8088/8086); PIXDIRTY then WIN to skip matching 16-bit video words after B800h reads. Restore known-good with PIXMAX then WIN, DIBXY then WIN or four-color original with T4CGA then WIN. All original files and the Windows boot logo, mouse, fonts, 16-color panning, three-row groups and old releases are unchanged. Exactly 9 opt-in files added. Compilers, memory limits, bit-order oracle and simulated video-write regression tests pass. Performance or physical graphics correctness of these three experimental drivers is NOT yet confirmed; the dirty comparison could be slower than straight writes. Do not call any new experiment the default until tested on real V20.' \
             --prerelease --latest=false
