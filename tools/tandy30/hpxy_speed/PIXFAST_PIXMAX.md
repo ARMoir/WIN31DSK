@@ -1,6 +1,6 @@
 # Tandy 1000 EX Windows 3.0: PIXFAST and PIXMAX all-out 16-color performance experiment
 
-**November 9, 2026: GitHub build and static/oracle tests PASSED. Real V20 hardware speed and visual correctness NOT YET MEASURED.**
+**Status, November 10, 2026:** GitHub build and pixel oracle tests passed. The owner has now tested PIXMAX on the physical Tandy 1000 EX and reports Program Manager fully loaded in **58 seconds** and Calculator in **22 seconds**. This is initial operational and timing evidence, not a complete graphics or cursor-correctness qualification. PIXFAST has not yet been timed on hardware.
 
 ## Released image and verified CI
 
@@ -59,4 +59,17 @@ Try `DIBXY`, `PIXFAST`, and `PIXMAX` in any order without reflashing, keeping XT
 
 Previous owner-tested **DIBXY baseline:** Program Manager **58 seconds**, Calculator **24 seconds**, and good interactive responsiveness. Previous REPIX text-repaint trial was rejected (Program Manager **71 seconds**, less desirable subjective responsiveness), and its code is **not** present in PIXFAST or PIXMAX. The four-color Tandy/CGA alternative remains available.
 
-A faster result must be measured on the NEC V20; no speculative percentage improvement is claimed.
+### Actual NEC V20 test update, November 10, 2026
+
+| Driver | Program Manager | Calculator |
+| --- | ---: | ---: |
+| DIBXY, owner-tested baseline | **58 s** | **24 s** |
+| PIXMAX, first owner hardware test | **58 s** | **22 s** |
+| PIXFAST | Not yet reported | Not yet reported |
+| REPIX, rejected | **71 s** | Not reported |
+
+PIXMAX's Program Manager startup was unchanged relative to the DIBXY measurement; Calculator was **2 seconds faster** (8.3% less elapsed time). This is a single unpaired run per profile; it establishes neither statistical significance nor reliable advantage for all workloads. The owner has not yet commented on PIXMAX's subjective interactive responsiveness, panning, text correctness or mouse artifacts. Retain DIBXY as the known-good default until the candidate passes more real-hardware observations. No source or driver changes are warranted by the timing alone.
+
+**Next useful comparison:** PIXFAST versus PIXMAX on the same image, especially Calculator and the responsiveness of overlapping windows. Compare any color glitches, cursor behavior and panning before promoting either driver. The original DIBXY rollback remains `DIBXY` then `WIN` from DOS.
+
+
