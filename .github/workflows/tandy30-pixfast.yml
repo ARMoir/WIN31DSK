@@ -1,0 +1,224 @@
+name: Tandy EX RGBI lookup turbo showdown - DIBXY vs PIXFAST vs PIXMAX
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-pixfast.yml'
+      - 'tools/tandy30/hpxy_speed/pixfast.py'
+      - 'tools/tandy30/hpxy_speed/build_pixfast.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pixel-turbo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install 16-bit DOS/Windows driver build and FAT16 tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dosbox-x mtools
+
+      - name: Retrieve exact upstream XR155 source, toolchain and DIB unroll
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init upstream
+          git -C upstream remote add origin https://github.com/astrobleem/oemdisplay-tandy.git
+          git -C upstream fetch --no-tags --depth=1 origin 8d48aa04560a4730c9ee3d946bed865ca9be0c43
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = 8d48aa04560a4730c9ee3d946bed865ca9be0c43
+          python3 upstream/tools/BUILDDEPS/DEPS.PY fetch --lock upstream/tools/BUILDDEPS/LOCK.JSON --out dep-git
+          python3 upstream/tools/BUILDDEPS/DEPS.PY materialize --lock upstream/tools/BUILDDEPS/LOCK.JSON --repo dep-git --out deps
+          python3 upstream/tools/BUILDDEPS/DEPS.PY verify --lock upstream/tools/BUILDDEPS/LOCK.JSON --deps deps
+          python3 upstream/tools/BUILDDEPS/DEPS.PY view \
+            --lock upstream/tools/BUILDDEPS/LOCK.JSON --deps deps \
+            --source-repo upstream \
+            --source-commit 8d48aa04560a4730c9ee3d946bed865ca9be0c43 \
+            --profile display --out view
+          mkdir -p view/experiments view/src/rrect view/src/hpxydib
+          for d in HPAN XYPAN XYRRECT; do
+            cp -a "upstream/experiments/$d" "view/experiments/$d"
+          done
+          cp upstream/src/rrect/RRPATCH.PY view/src/rrect/
+          git -C upstream fetch --no-tags --depth=1 origin 263e6d0f5299ee8ffb278493f0587e15698b454c
+          git -C upstream show 263e6d0f5299ee8ffb278493f0587e15698b454c:src/hpxydib/DIB.PY > view/src/hpxydib/DIB.PY
+          test "$(git -C upstream hash-object ../view/src/hpxydib/DIB.PY)" = e75be73fd88a109ae1f93b85191a7c30337e680b
+
+      - name: Exhaustive RGBI conversion correctness oracle
+        shell: bash
+        run: |
+          python3 tools/tandy30/hpxy_speed/pixfast.py --test
+
+      - name: Build 512-byte PIXFAST converter on pinned DIBXY (8086+V20)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/hpxy_speed/build_pixfast.py view /usr/bin/dosbox-x build-fast fast
+          mkdir -p package
+          cp build-fast/PIXFAST.DRV build-fast/PIXFAST_REPORT.json package/
+          sha256sum package/PIXFAST.DRV
+
+      - name: Build 1024-byte PIXMAX no-shift table (most aggressive)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/hpxy_speed/build_pixfast.py view /usr/bin/dosbox-x build-max max
+          cp build-max/PIXMAX.DRV build-max/PIXMAX_REPORT.json package/
+          sha256sum package/PIXMAX.DRV
+
+      - name: Download user-tested DIBXY CF card; preserve immutable gold standard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download tandy1000ex-win30-xrcga-dib-speedtest-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_XRCGA_DIB_SPEEDTEST_CF.img \
+            --dir package
+          echo 'adca85db75d58d33238d4e39fdd1138180776c77fd16d8b322c796159aefcb8c  package/TANDY1000EX_WIN30_XRCGA_DIB_SPEEDTEST_CF.img' | sha256sum -c -
+          cp package/TANDY1000EX_WIN30_XRCGA_DIB_SPEEDTEST_CF.img \
+            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img
+
+      - name: Install two opt-in turbo 16-color drivers; set DIBXY known-good default
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess,hashlib,json
+          img='package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img@@32256'
+          def read(path):
+              f=Path('package')/('get_'+path.replace('/','_'))
+              if f.exists():f.unlink()
+              subprocess.run(['mcopy','-i',img,'::/'+path,str(f)],check=True)
+              return f.read_bytes()
+          def put(path,data):
+              f=Path('package')/('put_'+path.replace('/','_'))
+              f.write_bytes(data)
+              subprocess.run(['mcopy','-o','-i',img,str(f),'::/'+path],check=True)
+              assert read(path)==data,path
+          base=read('TANDY88/XDIB.INI')
+          assert base.count(b'display.drv=XDIB.DRV')==1
+          assert b'fonts.fon=CGASYS.FON' in base
+          put('WINDOWS/SYSTEM.INI',base)
+          chooser=read('DIBXY.BAT')
+          assert chooser.count(b'XDIB.INI')>=3
+          assert chooser.count(b'C:\\DOS\\FC.EXE /B')==6
+          for name in ('PIXFAST','PIXMAX'):
+              driver=Path('package/'+name+'.DRV').read_bytes()
+              report=json.loads(Path('package/'+name+'_REPORT.json').read_text())
+              assert hashlib.sha256(driver).hexdigest()==report['sha256']
+              put('WINDOWS/SYSTEM/'+name+'.DRV',driver)
+              prof=base.replace(b'XDIB.DRV',name.encode()+b'.DRV')
+              assert prof.count(b'display.drv='+name.encode()+b'.DRV')==1
+              put('TANDY88/'+name+'.INI',prof)
+              cmd=chooser.replace(b'XDIB.INI',name.encode()+b'.INI').replace(b'DIBXY',name.encode())
+              assert cmd.count(b'C:\\DOS\\FC.EXE /B')==6
+              assert b'C:\\WINDOWS\\PROGMAN.INI' in cmd
+              put(name+'.BAT',cmd)
+              print('ADDED',name,'bytes',len(driver),'NE gross',report['ne_gross_alloc_bytes'])
+          print('PASS DIBXY default + optional PIXFAST and PIXMAX; zero other binaries changed')
+          PY
+
+      - name: Audit FAT mirrors, full original file inventory, 16-color preservation and DOS switches
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,struct,sys,json
+          sys.path.insert(0,'tools/tandy30/int33-test')
+          from fat16_image import Fat16
+          f='package/TANDY1000EX_WIN30_XRCGA_DIB_SPEEDTEST_CF.img'
+          g='package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img'
+          original=Fat16(bytearray(Path(f).read_bytes()))
+          image=Fat16(bytearray(Path(g).read_bytes()))
+          assert len(original.b)==len(image.b)==31808*512
+          assert original.b[:original.part]==image.b[:image.part],'Boot partition and logo protection'
+          count=struct.unpack_from('<H',image.b,image.part+22)[0]*512
+          assert image.b[image.fat:image.fat+count]==image.b[image.fat+count:image.fat+2*count]
+          def inventory(fs):
+              m={}
+              def descend(cluster=None,prefix=''):
+                  for _,name,attr,next_cluster,_ in fs.entries(cluster):
+                      if name in ('.','..'):continue
+                      name=prefix+'/'+name
+                      if attr&16:descend(next_cluster,name)
+                      else:m[name]=hashlib.sha256(fs.read(name)).hexdigest()
+              descend()
+              return m
+          old,new=inventory(original),inventory(image)
+          assert set(old)<=set(new),set(old)-set(new)
+          assert {p for p in old if old[p]!=new[p]}=={'/WINDOWS/SYSTEM.INI'}
+          expected={'/'+name+extension for name in ('PIXFAST','PIXMAX') for extension in ('.BAT',)}
+          expected|={'/TANDY88/'+name+'.INI' for name in ('PIXFAST','PIXMAX')}
+          expected|={'/WINDOWS/SYSTEM/'+name+'.DRV' for name in ('PIXFAST','PIXMAX')}
+          assert set(new)-set(old)==expected,(set(new)-set(old),expected)
+          assert image.read('/WINDOWS/SYSTEM.INI')==image.read('/TANDY88/XDIB.INI')
+          assert b'fonts.fon=CGASYS.FON' in image.read('/WINDOWS/SYSTEM.INI')
+          for name in ('PIXFAST','PIXMAX'):
+              drv=image.read('/WINDOWS/SYSTEM/'+name+'.DRV')
+              meta=json.loads(Path('package/'+name+'_REPORT.json').read_text())
+              assert hashlib.sha256(drv).hexdigest()==meta['sha256']
+              assert meta['ne_gross_alloc_bytes']<=127531
+              assert image.read('/'+name+'.BAT').count(b'C:\\DOS\\FC.EXE /B')==6
+              assert image.read('/TANDY88/'+name+'.INI').count(('display.drv='+name+'.DRV').encode())==1
+          for p in old:
+              if p.endswith(('.EXE','.COM','.DRV','.FON','.GRP','.BMP','.TXT','.BAT')) or 'LOGO' in p or 'SPLASH' in p:
+                  assert old[p]==new[p],p
+          for name in ('WIN.BAT','DIBXY.BAT','XRCGA.BAT','T4CGA.BAT','GOLDXY.BAT',
+                       'WINDOWS/WIN.INI','WINDOWS/PROGMAN.INI',
+                       'WINDOWS/MAIN.GRP','WINDOWS/ACCESSOR.GRP','WINDOWS/GAMES.GRP',
+                       'WINDOWS/SYSTEM/MSMOUSE1.DRV','WINDOWS/SYSTEM/CGASYS.FON',
+                       'WINDOWS/SYSTEM/XDIB.DRV','WINDOWS/SYSTEM/XR155.DRV',
+                       'WINDOWS/SYSTEM/TANDYDSP.DRV'):
+                  assert original.read('/'+name)==image.read('/'+name),name
+          assert b'RESERVE.COM' in image.read('/WIN.BAT').upper()
+          print('PASS',len(old),'original files: only active SYSTEM.INI to DIBXY, six new turbo files')
+          print('PASS authentic logo, three-row UI, panning, mouse, games, CGA fonts, original T4CGA and DIBXY')
+          PY
+          (cd package && sha256sum TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img > TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img.sha256)
+
+      - name: Upload independent binary drivers and complete bootable 16 MB CF image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_DIBXY_PIXFAST_PIXMAX_AllOut_Speed_Test
+          path: |
+            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img
+            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img.sha256
+            package/PIXFAST.DRV
+            package/PIXFAST_REPORT.json
+            package/PIXMAX.DRV
+            package/PIXMAX_REPORT.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish versioned experimental release without modifying working images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-dibxy-pixfast-pixmax-2026-11-09
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Existing release untouched; never overwrite'
+            exit 0
+          fi
+          gh release create "$TAG" \
+            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img \
+            package/TANDY1000EX_WIN30_DIBXY_PIXFAST_PIXMAX_CF.img.sha256 \
+            package/PIXFAST.DRV package/PIXFAST_REPORT.json \
+            package/PIXMAX.DRV package/PIXMAX_REPORT.json \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title 'ALL-OUT Tandy EX 16-color PIXFAST and PIXMAX RGBI lookup speed showdown' \
+            --notes 'Separate EXPERIMENTAL CF image, based on the known-good DIBXY 16-color driver (default) and compact CGA fonts. PIXFAST replaces 8 repeated bit-transpose pixels with two word stores using a 512-byte CS lookup table; PIXMAX instead uses two lookup tables (1024 bytes) to remove more shifts. Both preserve original 320x200 viewport, 640x256 logical panning, color mapping, cursor, Windows boot logo, games, protected WIN.BAT, Main/Accessories/Games three-row layout, serial mouse and T4CGA four-color option. Exit Windows to DOS and run PIXFAST then WIN, or PIXMAX then WIN. Run DIBXY then WIN to return to original. Python 65536 exhaustive and 250000 randomized RGBI pixel oracle tests, MASM 8086 checks, NE budget and byte-preservation audits all required to pass. This is aggressive experimental conversion, NOT YET qualified on physical Tandy: test correctness before deciding if speed actually improved.' \
+            --prerelease --latest=false
