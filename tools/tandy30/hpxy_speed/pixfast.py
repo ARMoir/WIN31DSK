@@ -103,9 +103,15 @@ def test():
     for n in range(250000):
         r,g,b,it=(rng.getrandbits(8) for _ in range(4))
         assert calculated(r,g,b,it)==ref(r,g,b,it)
-    for col in range(16):
-        v=calculated(*[(255 if (col & (1<<p)) else 0) for p in range(4)])
-        assert v==bytes([(col<<4)|col]*4)
+    # Exercise all 16 combinations of source plane inputs (R,G,B,I).
+    # Their encoded nibble is NOT the same integer because the original
+    # video bit order places RED at bit2 and BLUE at bit0.
+    for plane_mask in range(16):
+        channels=[255 if plane_mask & (1<<p) else 0 for p in range(4)]
+        mapped=((plane_mask&1)<<2)|(plane_mask&2)|((plane_mask&4)>>2)|(plane_mask&8)
+        expected=bytes([(mapped<<4)|mapped]*4)
+        assert ref(*channels)==expected, ("baseline",plane_mask)
+        assert calculated(*channels)==expected, ("LUT",plane_mask)
     print("PASS independent original assembly I-R-G-B oracle, red/blue one-hot regressions, 65536 exhaustive combinations, 250000 randomized groups, all 16 colors")
 
 def nibble_index(plane,other,half):
