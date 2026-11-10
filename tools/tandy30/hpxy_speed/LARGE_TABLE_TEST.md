@@ -1,6 +1,6 @@
 # Large RGBI lookup-table trial: FAST4K vs MAX8K vs BURST4K
 
-**November 10, 2026: Native builds, original color-mapping oracle and CF preservation checks passed. Real Tandy EX hardware speed and visual correctness are NOT YET MEASURED for these new drivers.**
+**November 10, 2026: Native builds and independent color-oracle checks passed. Initial physical Tandy EX performance measurements now recorded below.** These are individual stopwatch readings, not repeated controlled trials. Colors/panning/long-term stability for each new driver were not explicitly reported.
 
 ## Download and build details
 
@@ -42,16 +42,24 @@ Total NE segment minimum allowance: **196,608 bytes (192 KiB)**. None of these d
 
 The original assembly's channel order is **intensity, red, green, blue**, matching the color-correct PIXMAX. All source generators were compared with independent bit-serial reference routines over 65,536 exhaustive and 60,000 additional deterministic randomized pixel-plane patterns, plus the original owner-reported red/blue regression. Program Manager and Calculator start-up, text, cursor, panning and full/partial repaint require real-hardware verification.
 
-## Real-hardware measurement worksheet
+## Real-hardware results, November 10, 2026
 
-Our known-good corrected PIXMAX Calculator baseline is **18.8 seconds**. Previous separate four-driver testing (non-large-table builds) yielded PIXFAST PM 58 / Calculator 21, PIXBURST PM 59 / Calculator 21, PIXV20 PM 57 / Calculator 23 and PIXDIRTY PM 59 / Calculator 22. Those are individual observed runs and are **not** predictions for the new larger-table drivers.
+The owner provided a photo of stopwatch notes for each large-table trial. These are Program Manager and Calculator startup times in seconds.
 
-| Mode | Program Manager (sec) | Calculator (sec) | Colors correct? | Window redraw / panning feel |
-| --- | --- | --- | --- | --- |
-| PIXMAX baseline | Not measured for corrected driver | **18.8** | Confirmed | Responsive |
-| FAST4K | TBD | TBD | TBD | TBD |
-| MAX8K | TBD | TBD | TBD | TBD |
-| BURST4K | TBD | TBD | TBD | TBD |
+| Driver / source | Program Manager | Calculator | Display observations |
+| --- | ---: | ---: | --- |
+| **PIXMAX corrected 1 KiB, earlier separate run** | Not established for corrected driver | **18.8 sec** | Owner verified corrected colors and good responsiveness |
+| **FAST4K** | **57 sec** | 24 sec | No specific additional feedback |
+| **MAX8K** | 59 sec | **21 sec** | No specific additional feedback |
+| **BURST4K** | 58 sec | 24 sec | No specific additional feedback |
+| PIXFAST original smaller LUT, earlier separate run | 58 sec | 21 sec | Previously tested |
+| PIXBURST original smaller LUT, earlier separate run | 59 sec | 21 sec | Previously tested |
+| PIXV20, earlier separate run | 57 sec | 23 sec | Previously tested |
+| PIXDIRTY, earlier separate run | 59 sec | 22 sec | Previously tested |
+
+**Conclusion:** There is no clear measured speed win from increasing the table beyond corrected PIXMAX's 1 KiB. The larger MAX8K achieves 21-second Calculator time, slower than the earlier 18.8-second PIXMAX result. FAST4K and BURST4K both need 24 seconds. The 57/58/59-second Program Manager differences may be within stopwatch and boot-to-boot variation; corrected PIXMAX Program Manager startup remains unreported. Do not call PIXMAX a fundamental hardware limit based on these measurements, but **stop pursuing ever-larger LUTs as the next default optimization**. It is plausible that extra index work, data-memory traffic and instruction-fetch overhead outweigh shifts saved.
+
+**Recommendation:** Retain the owner-approved correct-color PIXMAX as default and preserve all earlier releases. Further significant gains likely require fundamentally different work reduction (profiling real GDI primitives, clipping/unneeded redraw, screen/bank handling, disk/memory bottlenecks) rather than larger fixed RGBI tables. Do not promote any of the new larger-table drivers on these data.
 
 **Build implementation:** [large_tables.py](https://github.com/ARMoir/WIN31DSK/blob/tandy16-rendering-performance/tools/tandy30/hpxy_speed/large_tables.py), [build_large_tables.py](https://github.com/ARMoir/WIN31DSK/blob/tandy16-rendering-performance/tools/tandy30/hpxy_speed/build_large_tables.py), [pack_large_tables.py](https://github.com/ARMoir/WIN31DSK/blob/tandy16-rendering-performance/tools/tandy30/hpxy_speed/pack_large_tables.py), [workflow](https://github.com/ARMoir/WIN31DSK/blob/tandy16-rendering-performance/.github/workflows/tandy30-large-tables.yml).
 
