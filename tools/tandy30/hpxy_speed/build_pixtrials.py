@@ -77,8 +77,22 @@ def main():
     if binary[ne:ne+2]!=b"NE":raise SystemExit("Not Windows NE driver")
     n=struct.unpack_from("<H",binary,ne+0x1c)[0]
     off=ne+struct.unpack_from("<H",binary,ne+0x22)[0]
-    gross=sum(struct.unpack_from("<H",binary,off+8*i+6)[0] or 65536 for i in range(n))
-    if gross>130000:raise SystemExit("Experimental NE allocation exceeds 130000-byte maximum: "+str(gross))
+    # The sum is an estimate of NE load-time minimum segment allocations,
+    # not a measurement of free conventional RAM or Windows loader overhead.
+    # A 16-bit NE segment can never have >65536 bytes of minimum allocation.
+    segments=[]
+    for idx in range(n):
+        disk_off,stored_size,flags,min_raw=struct.unpack_from("<HHHH",binary,off+8*idx)
+        min_bytes=min_raw or 65536
+        segments.append(dict(index=idx+1,minimum_bytes=min_bytes,
+                             stored_bytes=stored_size or 65536,
+                             flags_hex="0x%04x"%flags))
+    gross=sum(seg["minimum_bytes"] for seg in segments)
+    # User-approved high-risk trial budget: 192 KiB total minimum NE segments.
+    # Preserve individual 16-bit segments, correct colors, I/O and rollback.
+    budget=192*1024
+    if gross>budget:
+        raise SystemExit("Experimental NE allocation exceeds 192 KiB maximum: %d > %d"%(gross,budget))
     basename={"burst":"PIXBURST","v20":"PIXV20","dirty":"PIXDIRTY"}[variant]
     (out/(basename+".DRV")).write_bytes(binary)
     result=dict(candidate="Owner-tested corrected PIXMAX plus aggressive trial "+variant,
@@ -88,8 +102,14 @@ def main():
                 original_runtime_sha256="cb635f55688fc1ca4fd284eacc63c009160d46996ce844d4cf0510799018959c",
                 driver=basename+".DRV",driver_bytes=len(binary),
                 sha256=hashlib.sha256(binary).hexdigest(),
-                ne_segments=n,ne_gross_alloc_bytes=gross,experimental_ne_budget=130000,
+                ne_segments=n,ne_gross_alloc_bytes=gross,
+                experimental_ne_budget=budget,
+                experimental_ne_budget_kib=192,
                 exceeds_prior_conservative_budget=(gross>127531),
+                prior_experimental_limit_bytes=130000,
+                ne_segment_allocations=segments,
+                memory_scope="NE segment minimum only, not actual runtime conventional RAM",
+                raw_driver_file_bytes=len(binary),
                 before_dib_files=state["pre_dib"],after_dib_files=state["post_dib"],
                 pixel_converter=state["pixel"],experimental_patch=state["trial"],
                 source_build_report="RESULT.json describes base build flags, not final XY/DIB overlay")
