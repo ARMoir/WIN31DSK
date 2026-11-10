@@ -1,0 +1,158 @@
+# 192KiB NE test limit; true 4096/8224-byte LUT tables, not dummy padding.
+# PIXMAX correct-color hardware-tested default; three opt-in aggressive variants.
+# November 10 RGBI red/blue correction. Never overwrite the original experimental release.
+name: Tandy EX new lookup tables FAST4K MAX8K BURST4K
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-large-tables.yml'
+      - 'tools/tandy30/hpxy_speed/pixfast.py'
+      - 'tools/tandy30/hpxy_speed/build_large_tables.py'
+      - 'tools/tandy30/hpxy_speed/pixtrials.py'
+      - 'tools/tandy30/hpxy_speed/large_tables.py'
+      - 'tools/tandy30/hpxy_speed/pack_large_tables.py'
+      - 'tools/tandy30/hpxy_speed/driver_ne_memory.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pixel-turbo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 32
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install 16-bit DOS/Windows driver build and FAT16 tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dosbox-x mtools
+
+      - name: Retrieve exact upstream XR155 source, toolchain and DIB unroll
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init upstream
+          git -C upstream remote add origin https://github.com/astrobleem/oemdisplay-tandy.git
+          git -C upstream fetch --no-tags --depth=1 origin 8d48aa04560a4730c9ee3d946bed865ca9be0c43
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = 8d48aa04560a4730c9ee3d946bed865ca9be0c43
+          python3 upstream/tools/BUILDDEPS/DEPS.PY fetch --lock upstream/tools/BUILDDEPS/LOCK.JSON --out dep-git
+          python3 upstream/tools/BUILDDEPS/DEPS.PY materialize --lock upstream/tools/BUILDDEPS/LOCK.JSON --repo dep-git --out deps
+          python3 upstream/tools/BUILDDEPS/DEPS.PY verify --lock upstream/tools/BUILDDEPS/LOCK.JSON --deps deps
+          python3 upstream/tools/BUILDDEPS/DEPS.PY view \
+            --lock upstream/tools/BUILDDEPS/LOCK.JSON --deps deps \
+            --source-repo upstream \
+            --source-commit 8d48aa04560a4730c9ee3d946bed865ca9be0c43 \
+            --profile display --out view
+          mkdir -p view/experiments view/src/rrect view/src/hpxydib
+          for d in HPAN XYPAN XYRRECT; do
+            cp -a "upstream/experiments/$d" "view/experiments/$d"
+          done
+          cp upstream/src/rrect/RRPATCH.PY view/src/rrect/
+          git -C upstream fetch --no-tags --depth=1 origin 263e6d0f5299ee8ffb278493f0587e15698b454c
+          git -C upstream show 263e6d0f5299ee8ffb278493f0587e15698b454c:src/hpxydib/DIB.PY > view/src/hpxydib/DIB.PY
+          test "$(git -C upstream hash-object ../view/src/hpxydib/DIB.PY)" = e75be73fd88a109ae1f93b85191a7c30337e680b
+
+
+      - name: Original IRGB oracle against real 4KiB plane and 8KiB three-channel lookup implementations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/hpxy_speed/large_tables.py --test
+
+      - name: Compile all three enlarged LUT 16-bit native drivers (MASM, NE audit)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package
+          for mode in fast4k max8k burst4k; do
+            echo "::group::Compile $mode"
+            if ! python3 tools/tandy30/hpxy_speed/build_large_tables.py view /usr/bin/dosbox-x "build-$mode" "$mode"; then
+              echo "::error::Failed $mode driver"
+              tail -90 "build-$mode/renderer/EGA/BUILD0.LOG" || true
+              tail -65 "build-$mode/renderer/EGA/LINK.LOG" || true
+              exit 1
+            fi
+            case "$mode" in
+              fast4k) name=FAST4K ;;
+              max8k) name=MAX8K ;;
+              burst4k) name=BURST4K ;;
+            esac
+            cp "build-$mode/${name}.DRV" "build-$mode/${name}_REPORT.json" package/
+            sha256sum "package/${name}.DRV"
+            echo "::endgroup::"
+          done
+
+      - name: Download exact owner-tested color-fixed PIXMAX default CF card
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download tandy1000ex-win30-pixmax-default-colorfix-2026-11-10 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img --dir package
+          echo '29881151baf820b3e6453ebb9c024828109abea111e01fe52555c61a840adf73  package/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img' | sha256sum -c -
+
+      - name: Audit original Tandy four-color and corrected PIXMAX driver NE allocations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/hpxy_speed/driver_ne_memory.py \
+            --image package/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img \
+            --output package/NE_MEMORY_REPORT.json
+
+      - name: Attach drivers, DOS selectors and compare every existing file byte-for-byte
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/hpxy_speed/pack_large_tables.py \
+            --source package/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img \
+            --output package/TANDY1000EX_WIN30_LARGE_LUT_4K_8K_CF.img \
+            --package package
+
+      - name: Upload 16 MB bootable CF with three independent large-table drivers and reports
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: PIXMAX_LARGE_LUT_4K_8K_CANDIDATES
+          path: |
+            package/TANDY1000EX_WIN30_LARGE_LUT_4K_8K_CF.img
+            package/TANDY1000EX_WIN30_LARGE_LUT_4K_8K_CF.img.sha256
+            package/FAST4K.DRV
+            package/FAST4K_REPORT.json
+            package/MAX8K.DRV
+            package/MAX8K_REPORT.json
+            package/BURST4K.DRV
+            package/BURST4K_REPORT.json
+            package/NE_MEMORY_REPORT.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish verified 4KiB/8KiB lookup-table shootout without changing owner-tested defaults
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-fast4k-max8k-burst4k-2026-11-10
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release already published with verified assets; keep the existing image immutable'
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease --latest=false
+            exit 0
+          fi
+          gh release create "$TAG" \
+            package/TANDY1000EX_WIN30_LARGE_LUT_4K_8K_CF.img \
+            package/TANDY1000EX_WIN30_LARGE_LUT_4K_8K_CF.img.sha256 \
+            package/FAST4K.DRV package/FAST4K_REPORT.json \
+            package/MAX8K.DRV package/MAX8K_REPORT.json \
+            package/BURST4K.DRV package/BURST4K_REPORT.json \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title '4K vs 8K RGBI lookup shootout: FAST4K MAX8K BURST4K on owner-tested PIXMAX default' \
+            --notes 'Owner-verified color-correct PIXMAX remains default. Three genuinely larger, independent pixel lookup engines were compiled and installed as optional DOS-selectable Windows 3.0 drivers: FAST4K uses a 4096-byte full-byte four-plane direct lookup; MAX8K uses 8192 bytes of 12-bit three-channel RGB contribution lookup plus 32 bytes for intensity; BURST4K combines the 4096-byte direct lookup with proven two-group burst loop and exact bank-wrap fallback. Exit Windows to DOS, enter FAST4K, MAX8K, or BURST4K, then WIN. Use PIXMAX then WIN to restore normal operation, DIBXY for old 16-color, T4CGA for four-color. Original boot logo, fonts, serial mouse, desktop groups, panning, Windows launcher, and all 426 original files are byte-identical; only nine new optional files added. Passed independent original I-R-G-B palette oracle with exhaustive/random patterns, MASM Windows NE/8086 ISA checks, 192 KiB allocation ceiling and disk SHA256 auditing. These drivers have not yet been tested on physical Tandy; table size can decrease performance.' \
+            --prerelease --latest=false
