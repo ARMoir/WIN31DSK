@@ -46,7 +46,9 @@ def patch_burst(text,pix):
         "    mov cx,ss:[bp-8]\r\n"
         "    sub cx,ss:[bp-6]\r\n"
         "    cmp cx,2\r\n"
-        "    jb xyc_group\r\n"
+        "    jae xyc_burst_candidate\r\n"
+        "    jmp xyc_group\r\n"
+        "xyc_burst_candidate:\r\n"
         "    cmp word ptr ss:[bp-18],0\r\n"
         "    je xyc_burst_check_video\r\n"
         "    jmp xyc_burst_pair\r\n"
@@ -67,9 +69,13 @@ def patch_burst(text,pix):
         + "    inc si\r\n"
         + "    sub cx,2\r\n"
         + "    cmp cx,2\r\n"
-        + "    jae xyc_burst_pair\r\n"
+        + "    jb xyc_burst_exit_pair\r\n"
+        + "    jmp xyc_burst_pair\r\n"
+        + "xyc_burst_exit_pair:\r\n"
         + "    or cx,cx\r\n"
-        + "    jz xyc_row_done\r\n"
+        + "    jnz xyc_burst_one_tail\r\n"
+        + "    jmp xyc_row_done\r\n"
+        + "xyc_burst_one_tail:\r\n"
         + "    ; One remaining group uses exact original wrap-aware path.\r\n"
         + "    jmp xyc_group\r\n"
         + "xyc_group:\r\n"
@@ -130,20 +136,7 @@ def patch_dirty(text,pix):
             "    stosw\r\n"
             "pixdirty_done_%d:\r\n"%i
         )
-    for i in (0,1):
-        body=body.replace(needle,conditional(i),1)
-        # Avoid replacing first newly introduced STOSW for second insertion.
-        if i==0:
-            idx=body.index("pixdirty_done_0:\r\n")+len("pixdirty_done_0:\r\n")
-            prefix,tail=body[:idx],body[idx:]
-            assert tail.count(needle)==1
-            body=prefix+tail.replace(needle,"__SECOND_STOSW_PLACEHOLDER__\r\n")
-        else:
-            # The loop replaces exactly the original first STOSW.
-            # Move the *previous* original first through untouched.
-            pass
-    # Older replacement path above intentionally leaves placeholder when i=0.
-    # For complete precision, rebuild via split around two baseline STOSWs.
+    # Replace exactly two original STOSW sites, never re-replacing a conditional store.
     raw=text[start:end]
     parts=raw.split(needle)
     assert len(parts)==3
