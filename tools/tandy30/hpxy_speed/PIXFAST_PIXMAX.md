@@ -1,5 +1,8 @@
 # Tandy 1000 EX Windows 3.0: PIXFAST and PIXMAX all-out 16-color performance experiment
 
+**IMPORTANT COLOR-CHANNEL ERRATUM (November 10, 2026):** The November 9 experimental `PIXFAST.DRV` and `PIXMAX.DRV` have a **red/blue channel swap**. The user identified abnormal title bar/icon colors on physical Tandy hardware. Those first experimental drivers are **not color-correct** and should not be used for normal work. At DOS, enter `DIBXY` then `WIN` to restore correct colors, or `T4CGA` then `WIN` to select original four-color graphics. The original compiled `get_nibble` macro packs **intensity, red, green, blue** in that order; the new lookup used intensity, blue, green, red. The Python test had replicated the error and was therefore not independent. Both table generators and the oracle have now been corrected. A separately versioned corrected build is being tested; do not confuse it with the old November 9 test release.
+
+
 **Status, November 10, 2026:** GitHub build and pixel oracle tests passed. The owner has now tested PIXMAX on the physical Tandy 1000 EX and reports Program Manager fully loaded in **58 seconds** and Calculator in **22 seconds**. This is initial operational and timing evidence, not a complete graphics or cursor-correctness qualification. PIXFAST has not yet been timed on hardware.
 
 ## Released image and verified CI
