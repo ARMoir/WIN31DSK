@@ -1,6 +1,7 @@
+# 192 KiB (196608 bytes) total NE minimum allocation ceiling, with 64 KiB per-segment limit.
 # PIXMAX correct-color hardware-tested default; three opt-in aggressive variants.
 # November 10 RGBI red/blue correction. Never overwrite the original experimental release.
-name: Tandy EX triple turbo PIXBURST PIXV20 PIXDIRTY
+name: Tandy EX 192KiB turbo limits and 4-color driver memory report
 
 on:
   push:
@@ -11,6 +12,7 @@ on:
       - 'tools/tandy30/hpxy_speed/build_pixtrials.py'
       - 'tools/tandy30/hpxy_speed/pixtrials.py'
       - 'tools/tandy30/hpxy_speed/pack_pixtrials.py'
+      - 'tools/tandy30/hpxy_speed/driver_ne_memory.py'
   workflow_dispatch:
 
 permissions:
@@ -97,6 +99,14 @@ jobs:
             --pattern TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img --dir package
           echo '29881151baf820b3e6453ebb9c024828109abea111e01fe52555c61a840adf73  package/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img' | sha256sum -c -
 
+      - name: Audit original Tandy four-color and corrected PIXMAX driver NE allocations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/hpxy_speed/driver_ne_memory.py \
+            --image package/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img \
+            --output package/NE_MEMORY_REPORT.json
+
       - name: Attach drivers, DOS selectors and compare every existing file byte-for-byte
         shell: bash
         run: |
@@ -119,6 +129,7 @@ jobs:
             package/PIXV20_REPORT.json
             package/PIXDIRTY.DRV
             package/PIXDIRTY_REPORT.json
+            package/NE_MEMORY_REPORT.json
           if-no-files-found: error
           retention-days: 30
 
