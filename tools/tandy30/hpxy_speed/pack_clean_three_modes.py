@@ -64,6 +64,8 @@ DROP_FONT={"XTESYS.FON","XTEFIX.FON","XTEOEM.FON",
 DROP_WINDOWS={"XTPAN.EXE","XYCTL.EXE","PANCTL.EXE","CGACTL.EXE"}
 EXPECTED_ORIGINAL_FILES=426
 IMAGE_BYTES=31808*512
+# MS-DOS 6.22 batch parameters %1 through %9 (the later %* form is unsupported).
+LS_BATCH=b"@ECHO OFF\r\nDIR %1 %2 %3 %4 %5 %6 %7 %8 %9\r\n"
 
 def digest(raw):
     return hashlib.sha256(raw).hexdigest()
@@ -129,6 +131,10 @@ def main():
     assert digest(old.read("/WINDOWS/SYSTEM/PIXMAX.DRV"))==PIXMAX_DRIVER_SHA
     assert digest(old.read("/WINDOWS/SYSTEM/TANDYDSP.DRV"))==TANDY4_DRIVER_SHA
     assert digest(old.read("/WIN.BAT"))==WIN_LAUNCHER_SHA
+    # LS is in C:\\DOS, so plain `ls` must resolve through the DOS PATH.
+    dos_autoexec=old.read("/AUTOEXEC.BAT").upper()
+    path_lines=[line for line in dos_autoexec.splitlines() if line.strip().startswith((b"PATH ",b"PATH=" ,b"SET PATH="))]
+    assert any(b"C:\\DOS" in line for line in path_lines), "C:\\DOS must be present on AUTOEXEC.BAT PATH for LS command"
     assert old.read("/TANDY88/SYS7.INI")==t7.read("/TANDY88/SYS7.INI")
     np_ini=old.read("/TANDY88/SYS7.INI")
     assert np_ini.count(b"display.drv=TR73216.DRV")==1
@@ -186,9 +192,11 @@ def main():
     put("/TANDY88/NOPAN16.INI",np_ini)
     put("/TANDY88/WINNP.INI",win_np)
     put("/NOPAN16.BAT",np_switch)
+    # A tiny DIR alias for users accustomed to typing `ls` at a DOS prompt.
+    put("/DOS/LS.BAT",LS_BATCH)
     output=Fat16(bytearray(opts.output.read_bytes()))
     actual=files(output)
-    add={"/TANDY88/NOPAN16.INI","/TANDY88/WINNP.INI","/NOPAN16.BAT"}
+    add={"/TANDY88/NOPAN16.INI","/TANDY88/WINNP.INI","/NOPAN16.BAT","/DOS/LS.BAT"}
     assert set(originals)-set(actual)==deletions
     assert set(actual)-set(originals)==add, (set(actual)-set(originals),add)
     modified=[p for p in set(originals)&set(actual) if originals[p]!=actual[p]]
@@ -212,6 +220,7 @@ def main():
     assert output.read("/TANDY88/NOPAN16.INI")==t7.read("/TANDY88/SYS7.INI")
     assert output.read("/TANDY88/WINNP.INI")==win_np
     assert output.read("/NOPAN16.BAT")==np_switch
+    assert output.read("/DOS/LS.BAT")==LS_BATCH
     assert output.read("/PIXMAX.BAT")==old.read("/PIXMAX.BAT")
     assert output.read("/T4CGA.BAT")==old.read("/T4CGA.BAT")
     for item in ("/WINDOWS/SYSTEM/TR53216.DRV",
@@ -244,6 +253,7 @@ def main():
         "deleted_experimental_files":sorted(deletions),"added":sorted(add),
         "total_visible_files":len(actual),
         "selected_initial_profile":"PIXMAX",
+        "dos_utilities":{"LS.BAT":{"path":"C:\\DOS\\LS.BAT","behavior":"DIR with %1 through %9 arguments","on_dos_path":True}},
         "modes":[
           {"selector":"T4CGA","driver":"TANDYDSP.DRV","colors":4,"physical":"640x200","panning":False,
            "hardware_status":"previously verified"},
@@ -264,6 +274,7 @@ def main():
           "retained identical,",len(deletions),"obsolete experiments deleted,",
           len(add),"new mode-control files; total",len(actual))
     print("PASS only three root DOS mode selectors T4CGA, NOPAN16, PIXMAX")
+    print("PASS C:\\DOS\\LS.BAT delegates to DIR and forwards nine DOS 6.22 batch arguments; DOS PATH verified")
     print("PASS TR73216 original verified native 320x200 driver and no PAN.EXE in NOPAN16 WIN.INI")
     print("PASS PIXMAX current default and 4-color wide layout exactly preserved")
     print("PASS mouse, logo, program groups, DOS files, all Windows apps and FAT16 mirrors preserved")
