@@ -124,6 +124,15 @@ def main():
     t7=Fat16(bytearray(old7))
     originals=files(old)
     if len(originals)!=EXPECTED_ORIGINAL_FILES:raise RuntimeError("Unexpected base inventory size")
+    # LS.BAT is already included on some of the original Tandy images.
+    # In that case replace its contents rather than counting it as new.
+    existing_ls="/DOS/LS.BAT" in originals
+    doskey_options=("/DOS/DOSKEY.COM","/DOS/DOSKEY.EXE")
+    doskey_file=next((p for p in doskey_options if p in originals),None)
+    if not doskey_file:
+        raise RuntimeError("No authentic DOSKEY.COM or DOSKEY.EXE in the pinned DOS 6.22 source image")
+    print("Source LS.BAT present:",existing_ls,"source DOSKEY executable:",doskey_file)
+
     # Verify actual native no-panning TRIAL7 binary in both original images.
     tr7b=old.read("/WINDOWS/SYSTEM/TR73216.DRV")
     assert tr7b==t7.read("/WINDOWS/SYSTEM/TR73216.DRV")
@@ -194,14 +203,31 @@ def main():
     put("/NOPAN16.BAT",np_switch)
     # A tiny DIR alias for users accustomed to typing `ls` at a DOS prompt.
     put("/DOS/LS.BAT",LS_BATCH)
+    # DOS 6.22 DOSKEY is memory-resident (~3 KiB plus history buffer).
+    # Only alter AUTOEXEC.BAT; all graphics, drivers and boot protection remain.
+    before_auto=old.read("/AUTOEXEC.BAT")
+    if b"DOSKEY" in before_auto.upper():
+        raise RuntimeError("Original AUTOEXEC already references DOSKEY: audit before appending")
+    history_line=("C:\\DOS\\"+doskey_file.rsplit("/",1)[-1]+" /INSERT").encode("ascii")
+    newline=b"\r\n" if b"\r\n" in before_auto else b"\n"
+    doskey_autoexec=(before_auto.rstrip(b"\r\n")
+                     +newline+b"REM Command history: Up/Down arrows, F7 list"+newline
+                     +history_line+newline)
+    put("/AUTOEXEC.BAT",doskey_autoexec)
     output=Fat16(bytearray(opts.output.read_bytes()))
     actual=files(output)
-    add={"/TANDY88/NOPAN16.INI","/TANDY88/WINNP.INI","/NOPAN16.BAT","/DOS/LS.BAT"}
+    new_modes={"/TANDY88/NOPAN16.INI","/TANDY88/WINNP.INI","/NOPAN16.BAT"}
+    add=new_modes | (set() if existing_ls else {"/DOS/LS.BAT"})
     assert set(originals)-set(actual)==deletions
     assert set(actual)-set(originals)==add, (set(actual)-set(originals),add)
-    modified=[p for p in set(originals)&set(actual) if originals[p]!=actual[p]]
-    if modified:raise RuntimeError("Original files modified: "+repr(modified))
-    for path in ("/WIN.BAT","/AUTOEXEC.BAT","/CONFIG.SYS",
+    modified={p for p in set(originals)&set(actual) if originals[p]!=actual[p]}
+    allowed_modified={"/AUTOEXEC.BAT"}
+    if existing_ls and old.read("/DOS/LS.BAT")!=LS_BATCH:
+        allowed_modified.add("/DOS/LS.BAT")
+    if modified!=allowed_modified:
+        raise RuntimeError("Unexpected changes: %r expected %r"%(modified,allowed_modified))
+
+    for path in ("/WIN.BAT","/CONFIG.SYS",
                  "/WINDOWS/SYSTEM/PIXMAX.DRV","/WINDOWS/SYSTEM/TR73216.DRV",
                  "/WINDOWS/SYSTEM/TANDYDSP.DRV","/WINDOWS/SYSTEM/MSMOUSE1.DRV",
                  "/WINDOWS/SYSTEM/CGASYS.FON","/WINDOWS/SYSTEM/EGASYS.FON",
@@ -219,6 +245,9 @@ def main():
     assert output.read("/WINDOWS/WIN.INI")==output.read("/TANDY88/WINXR.INI")
     assert output.read("/TANDY88/NOPAN16.INI")==t7.read("/TANDY88/SYS7.INI")
     assert output.read("/TANDY88/WINNP.INI")==win_np
+    assert output.read("/AUTOEXEC.BAT")==doskey_autoexec
+    assert output.read(doskey_file)==old.read(doskey_file)
+    assert output.read("/DOS/LS.BAT")==LS_BATCH
     assert output.read("/NOPAN16.BAT")==np_switch
     assert output.read("/DOS/LS.BAT")==LS_BATCH
     assert output.read("/PIXMAX.BAT")==old.read("/PIXMAX.BAT")
@@ -252,6 +281,13 @@ def main():
         "original_files":len(originals),"retained_unchanged":len(originals)-len(deletions),
         "deleted_experimental_files":sorted(deletions),"added":sorted(add),
         "total_visible_files":len(actual),
+        "updated_existing_files":sorted(modified),
+        "dos_conveniences":{
+           "ls":{"file":"C:\\DOS\\LS.BAT","contents":LS_BATCH.decode("ascii").strip(),
+                 "already_in_source":existing_ls},
+           "history":{"program":doskey_file,"autoexec_command":history_line.decode("ascii"),
+                      "resident_program_preexisting":True}
+        },
         "selected_initial_profile":"PIXMAX",
         "dos_utilities":{"LS.BAT":{"path":"C:\\DOS\\LS.BAT","behavior":"DIR with %1 through %9 arguments","on_dos_path":True}},
         "modes":[
@@ -274,6 +310,9 @@ def main():
           "retained identical,",len(deletions),"obsolete experiments deleted,",
           len(add),"new mode-control files; total",len(actual))
     print("PASS only three root DOS mode selectors T4CGA, NOPAN16, PIXMAX")
+    print("PASS C:\\DOS\\LS.BAT wraps DIR with %1..%9; existing LS detected:",existing_ls)
+    print("PASS resident",doskey_file,"loads at DOS startup via AUTOEXEC.BAT; PATH verified")
+
     print("PASS C:\\DOS\\LS.BAT delegates to DIR and forwards nine DOS 6.22 batch arguments; DOS PATH verified")
     print("PASS TR73216 original verified native 320x200 driver and no PAN.EXE in NOPAN16 WIN.INI")
     print("PASS PIXMAX current default and 4-color wide layout exactly preserved")
