@@ -1,4 +1,4 @@
-name: Tandy EX CLEAN 3 display modes plus C DOS LS alias
+name: Tandy EX CLEAN 3 modes with DOS LS alias and DOSKEY history
 
 on:
   push:
@@ -47,18 +47,18 @@ jobs:
           python3 tools/tandy30/hpxy_speed/pack_clean_three_modes.py \
             --pixmax input/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img \
             --trial7 input/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img \
-            --output output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_LS_CF.img \
+            --output output/TANDY1000EX_WIN30_THREE_MODES_LS_DOSKEY_CF.img \
             --report output/THREE_MODES_MANIFEST.json
-          test -s output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_LS_CF.img.sha256
-          (cd output && sha256sum -c TANDY1000EX_WIN30_THREE_MODES_CLEAN_LS_CF.img.sha256)
+          test -s output/TANDY1000EX_WIN30_THREE_MODES_LS_DOSKEY_CF.img.sha256
+          (cd output && sha256sum -c TANDY1000EX_WIN30_THREE_MODES_LS_DOSKEY_CF.img.sha256)
 
       - name: Publish exact source-and-output file manifest
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Tandy_1000_EX_CLEAN_Three_Display_Modes_With_LS
+          name: Tandy_1000_EX_CLEAN_3_Modes_LS_DOSKEY
           path: |
-            output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_LS_CF.img
-            output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_LS_CF.img.sha256
+            output/TANDY1000EX_WIN30_THREE_MODES_LS_DOSKEY_CF.img
+            output/TANDY1000EX_WIN30_THREE_MODES_LS_DOSKEY_CF.img.sha256
             output/THREE_MODES_MANIFEST.json
           if-no-files-found: error
           retention-days: 30
@@ -67,7 +67,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: tandy1000ex-win30-clean-three-modes-ls-2026-11-11
+          TAG: tandy1000ex-win30-clean-three-modes-ls-doskey-2026-11-11
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -75,10 +75,10 @@ jobs:
             exit 0
           fi
           gh release create "$TAG" \
-            output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_LS_CF.img \
-            output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_LS_CF.img.sha256 \
+            output/TANDY1000EX_WIN30_THREE_MODES_LS_DOSKEY_CF.img \
+            output/TANDY1000EX_WIN30_THREE_MODES_LS_DOSKEY_CF.img.sha256 \
             output/THREE_MODES_MANIFEST.json \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title 'Tandy 1000 EX Windows 3.0: three clean display modes plus DOS ls shortcut' \
-            --notes 'CLEAN 16 MB DOS 6.22 / Windows 3.0 CF image with EXACTLY THREE selectable Tandy display modes. At C: DOS prompt after exiting Windows: T4CGA then WIN chooses the proven Microsoft 640x200 four-color driver and wide Program Manager layout; NOPAN16 then WIN chooses the previously hardware-tested original native TRIAL7 320x200 16-color TR73216.DRV and no panning helper at startup; PIXMAX then WIN selects the color-corrected user-tested 16-color 320x200 viewport of 640x256 pannable desktop and compact 3-row layout, default on first boot. The original Windows splash/boot logo, all Windows apps, games, original Microsoft font files, Windows 1.04 serial mouse, DOS startup and RESERVE.COM mode-3 guard, original CGA/EGA font matching and per-profile group layout are preserved. Also adds C:\DOS\LS.BAT to run DIR and forward up to nine DOS 6.22 batch arguments, with the existing AUTOEXEC PATH verified. ALL experiment-only display drivers, fonts, obsolete batch switchers and candidate INIs were removed from the DOS file inventory, original surviving files byte-identical. The gold-standard TRIAL7 and PIXMAX CF releases remain unchanged. New combined 3-mode image and new NOPAN16 switcher have passed FAT16 and exact driver/profile/original-file static verification but have NOT yet been individually validated on the physical NEC V20, particularly native TRIAL7 plus modern compact group layout. Restore PIXMAX from DOS if any issues.' \
+            --title 'Tandy 1000 EX Windows 3.0: three clean display modes, DOS ls and DOSKEY history' \
+            --notes 'CLEAN 16 MB DOS 6.22 / Windows 3.0 CF image with EXACTLY THREE selectable Tandy display modes. At C: DOS prompt after exiting Windows: T4CGA then WIN chooses the proven Microsoft 640x200 four-color driver and wide Program Manager layout; NOPAN16 then WIN chooses the previously hardware-tested original native TRIAL7 320x200 16-color TR73216.DRV and no panning helper at startup; PIXMAX then WIN selects the color-corrected user-tested 16-color 320x200 viewport of 640x256 pannable desktop and compact 3-row layout, default on first boot. The original Windows splash/boot logo, all Windows apps, games, original Microsoft font files, Windows 1.04 serial mouse, DOS startup and RESERVE.COM mode-3 guard, original CGA/EGA font matching and per-profile group layout are preserved. Also adds C:\DOS\LS.BAT to run DIR and forward up to nine DOS 6.22 batch arguments, with the existing AUTOEXEC PATH verified. Loads the original DOS 6.22 DOSKEY.COM (or DOSKEY.EXE if installed) at each boot using AUTOEXEC.BAT, enabling command history with Up/Down arrows and F7. No modifications to DOS video drivers or keyboard scan code setup. Changes in source file manifest are restricted to AUTOEXEC.BAT and optional existing LS.BAT, plus three NOPAN16 selector/profile files. ALL experiment-only display drivers, fonts, obsolete batch switchers and candidate INIs were removed from the DOS file inventory, original surviving files byte-identical. The gold-standard TRIAL7 and PIXMAX CF releases remain unchanged. New combined 3-mode image and new NOPAN16 switcher have passed FAT16 and exact driver/profile/original-file static verification but have NOT yet been individually validated on the physical NEC V20, particularly native TRIAL7 plus modern compact group layout. Restore PIXMAX from DOS if any issues.' \
             --prerelease --latest=false
