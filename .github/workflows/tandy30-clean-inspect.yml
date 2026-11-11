@@ -1,0 +1,28 @@
+name: Inspect old native 16-color TRIAL7 and current PIXMAX files
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-clean-inspect.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get SHA-pinned real-hardware-tested images
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p card
+          gh release download tandy1000ex-win30-pixmax-default-colorfix-2026-11-10 --repo "$GITHUB_REPOSITORY" --pattern TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img --dir card
+          gh release download tandy1000ex-win30-trial7-16color-performance-2026-11-06 --repo "$GITHUB_REPOSITORY" --pattern TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img --dir card
+          echo '29881151baf820b3e6453ebb9c024828109abea111e01fe52555c61a840adf73  card/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img' | sha256sum -c -
+          echo '73129da6ca249120ee7bb1902b6da6b31eca40753dabe2fcc2a8220372574774  card/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img' | sha256sum -c -
+      - name: Print installed modes, display drivers and launcher/profile snapshots
+        run: |
+          python3 tools/tandy30/hpxy_speed/inspect_three_modes.py card/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img card/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img
