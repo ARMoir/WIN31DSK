@@ -1,0 +1,84 @@
+name: Tandy EX CLEAN 3 display modes (T4CGA, NOPAN16, PIXMAX)
+
+on:
+  push:
+    branches: [tandy16-rendering-performance]
+    paths:
+      - '.github/workflows/tandy30-clean-three-modes.yml'
+      - 'tools/tandy30/hpxy_speed/pack_clean_three_modes.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  three-mode-clean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install DOS FAT16 tools
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mtools
+
+      - name: Retrieve both physical-hardware-tested original 16MB cards
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p input output
+          gh release download tandy1000ex-win30-pixmax-default-colorfix-2026-11-10 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img --dir input
+          gh release download tandy1000ex-win30-trial7-16color-performance-2026-11-06 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img --dir input
+          echo '29881151baf820b3e6453ebb9c024828109abea111e01fe52555c61a840adf73  input/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img' | sha256sum -c -
+          echo '73129da6ca249120ee7bb1902b6da6b31eca40753dabe2fcc2a8220372574774  input/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img' | sha256sum -c -
+
+      - name: Produce exact three-mode CF and remove experimental drivers/profiles/switches
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/tandy30/hpxy_speed/pack_clean_three_modes.py \
+            --pixmax input/TANDY1000EX_WIN30_PIXMAX_DEFAULT_RGBFIX_CF.img \
+            --trial7 input/TANDY1000EX_WIN30_TRIAL7_MAX_RENDER_TEST.img \
+            --output output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_CF.img \
+            --report output/THREE_MODES_MANIFEST.json
+          test -s output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_CF.img.sha256
+          (cd output && sha256sum -c TANDY1000EX_WIN30_THREE_MODES_CLEAN_CF.img.sha256)
+
+      - name: Publish exact source-and-output file manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Tandy_1000_EX_CLEAN_Three_Display_Modes
+          path: |
+            output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_CF.img
+            output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_CF.img.sha256
+            output/THREE_MODES_MANIFEST.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: New immutable GitHub release, never overwrite tested images
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: tandy1000ex-win30-clean-three-modes-2026-11-11
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists: will not overwrite image"
+            exit 0
+          fi
+          gh release create "$TAG" \
+            output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_CF.img \
+            output/TANDY1000EX_WIN30_THREE_MODES_CLEAN_CF.img.sha256 \
+            output/THREE_MODES_MANIFEST.json \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title 'Tandy 1000 EX Windows 3.0: clean three-display-mode CF image' \
+            --notes 'CLEAN 16 MB DOS 6.22 / Windows 3.0 CF image with EXACTLY THREE selectable Tandy display modes. At C: DOS prompt after exiting Windows: T4CGA then WIN chooses the proven Microsoft 640x200 four-color driver and wide Program Manager layout; NOPAN16 then WIN chooses the previously hardware-tested original native TRIAL7 320x200 16-color TR73216.DRV and no panning helper at startup; PIXMAX then WIN selects the color-corrected user-tested 16-color 320x200 viewport of 640x256 pannable desktop and compact 3-row layout, default on first boot. The original Windows splash/boot logo, all Windows apps, games, original Microsoft font files, Windows 1.04 serial mouse, DOS startup and RESERVE.COM mode-3 guard, original CGA/EGA font matching and per-profile group layout are preserved. ALL experiment-only display drivers, fonts, obsolete batch switchers and candidate INIs were removed from the DOS file inventory, original surviving files byte-identical. The gold-standard TRIAL7 and PIXMAX CF releases remain unchanged. New combined 3-mode image and new NOPAN16 switcher have passed FAT16 and exact driver/profile/original-file static verification but have NOT yet been individually validated on the physical NEC V20, particularly native TRIAL7 plus modern compact group layout. Restore PIXMAX from DOS if any issues.' \
+            --prerelease --latest=false
