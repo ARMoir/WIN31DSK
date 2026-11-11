@@ -19,7 +19,7 @@ for path in P:
             else: files.append((p,size))
     walk()
     print("FILE_COUNT",len(files))
-    for prefix in ("/","/TANDY88/","/WINDOWS/SYSTEM/"):
+    for prefix in ("/","/TANDY88/","/WINXT/","/WINDOWS/","/WINDOWS/SYSTEM/"):
         print("=== DIR",prefix,"===")
         for p,size in files:
             if p.rsplit("/",1)[0]+"/"==prefix:
