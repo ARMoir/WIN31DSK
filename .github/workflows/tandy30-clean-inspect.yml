@@ -1,4 +1,4 @@
-name: Inspect old native 16-color TRIAL7 and current PIXMAX files
+name: Inspect full experiment folders on clean three-mode source cards
 on:
   push:
     branches: [tandy16-rendering-performance]
