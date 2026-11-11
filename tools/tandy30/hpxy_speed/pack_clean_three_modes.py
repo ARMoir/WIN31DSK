@@ -66,6 +66,17 @@ EXPECTED_ORIGINAL_FILES=426
 IMAGE_BYTES=31808*512
 # MS-DOS 6.22 batch parameters %1 through %9 (the later %* form is unsupported).
 LS_BATCH=b"@ECHO OFF\r\nDIR %1 %2 %3 %4 %5 %6 %7 %8 %9\r\n"
+# DATE and TIME, invoked WITHOUT arguments, display DOS's current settings and
+# interactively ask for replacements. ENTER retains the existing value.
+# CLOCK can also be typed manually later because C:\DOS is on the PATH.
+CLOCK_BATCH=(b"@ECHO OFF\r\n"
+             b"ECHO.\r\n"
+             b"ECHO ===== TANDY DATE AND TIME =====\r\n"
+             b"ECHO Set date, or press ENTER to keep the shown date.\r\n"
+             b"DATE\r\n"
+             b"ECHO Set time, or press ENTER to keep the shown time.\r\n"
+             b"TIME\r\n"
+             b"ECHO.\r\n")
 
 def digest(raw):
     return hashlib.sha256(raw).hexdigest()
@@ -127,6 +138,8 @@ def main():
     # LS.BAT is already included on some of the original Tandy images.
     # In that case replace its contents rather than counting it as new.
     existing_ls="/DOS/LS.BAT" in originals
+    if "/DOS/CLOCK.BAT" in originals:
+        raise RuntimeError("Existing CLOCK.BAT must be audited before overwrite")
     doskey_options=("/DOS/DOSKEY.COM","/DOS/DOSKEY.EXE")
     doskey_file=next((p for p in doskey_options if p in originals),None)
     if not doskey_file:
@@ -203,6 +216,7 @@ def main():
     put("/NOPAN16.BAT",np_switch)
     # A tiny DIR alias for users accustomed to typing `ls` at a DOS prompt.
     put("/DOS/LS.BAT",LS_BATCH)
+    put("/DOS/CLOCK.BAT",CLOCK_BATCH)
     # DOS 6.22 DOSKEY is memory-resident (~3 KiB plus history buffer).
     # Only alter AUTOEXEC.BAT; all graphics, drivers and boot protection remain.
     before_auto=old.read("/AUTOEXEC.BAT")
@@ -210,14 +224,20 @@ def main():
         raise RuntimeError("Original AUTOEXEC already references DOSKEY: audit before appending")
     history_line=("C:\\DOS\\"+doskey_file.rsplit("/",1)[-1]+" /INSERT").encode("ascii")
     newline=b"\r\n" if b"\r\n" in before_auto else b"\n"
+    # CALL is required: entering another BAT from AUTOEXEC without CALL
+    # would transfer control and skip DOSKEY startup.
+    clock_line=b"CALL C:\\DOS\\CLOCK.BAT"
     doskey_autoexec=(before_auto.rstrip(b"\r\n")
-                     +newline+b"REM Command history: Up/Down arrows, F7 list"+newline
+                     +newline+b"REM Tandy EX has no battery-backed clock; prompt each boot"+newline
+                     +clock_line+newline
+                     +b"REM Command history: Up/Down arrows, F7 list"+newline
                      +history_line+newline)
+    assert doskey_autoexec.index(clock_line)<doskey_autoexec.index(history_line)
     put("/AUTOEXEC.BAT",doskey_autoexec)
     output=Fat16(bytearray(opts.output.read_bytes()))
     actual=files(output)
     new_modes={"/TANDY88/NOPAN16.INI","/TANDY88/WINNP.INI","/NOPAN16.BAT"}
-    add=new_modes | (set() if existing_ls else {"/DOS/LS.BAT"})
+    add=new_modes | {"/DOS/CLOCK.BAT"} | (set() if existing_ls else {"/DOS/LS.BAT"})
     assert set(originals)-set(actual)==deletions
     assert set(actual)-set(originals)==add, (set(actual)-set(originals),add)
     modified={p for p in set(originals)&set(actual) if originals[p]!=actual[p]}
@@ -248,6 +268,9 @@ def main():
     assert output.read("/AUTOEXEC.BAT")==doskey_autoexec
     assert output.read(doskey_file)==old.read(doskey_file)
     assert output.read("/DOS/LS.BAT")==LS_BATCH
+    assert output.read("/DOS/CLOCK.BAT")==CLOCK_BATCH
+    assert output.read("/AUTOEXEC.BAT").count(b"CALL C:\\DOS\\CLOCK.BAT")==1
+    assert output.read("/AUTOEXEC.BAT").index(b"CALL C:\\DOS\\CLOCK.BAT") < output.read("/AUTOEXEC.BAT").index(history_line)
     assert output.read("/NOPAN16.BAT")==np_switch
     assert output.read("/DOS/LS.BAT")==LS_BATCH
     assert output.read("/PIXMAX.BAT")==old.read("/PIXMAX.BAT")
@@ -286,7 +309,10 @@ def main():
            "ls":{"file":"C:\\DOS\\LS.BAT","contents":LS_BATCH.decode("ascii").strip(),
                  "already_in_source":existing_ls},
            "history":{"program":doskey_file,"autoexec_command":history_line.decode("ascii"),
-                      "resident_program_preexisting":True}
+                      "resident_program_preexisting":True},
+           "clock":{"program":"C:\\DOS\\CLOCK.BAT",
+                    "startup_command":clock_line.decode("ascii"),
+                    "date_and_time_prompts":True,"manual_invocation":"CLOCK"}
         },
         "selected_initial_profile":"PIXMAX",
         "dos_utilities":{"LS.BAT":{"path":"C:\\DOS\\LS.BAT","behavior":"DIR with %1 through %9 arguments","on_dos_path":True}},
@@ -312,6 +338,7 @@ def main():
     print("PASS only three root DOS mode selectors T4CGA, NOPAN16, PIXMAX")
     print("PASS C:\\DOS\\LS.BAT wraps DIR with %1..%9; existing LS detected:",existing_ls)
     print("PASS resident",doskey_file,"loads at DOS startup via AUTOEXEC.BAT; PATH verified")
+    print("PASS DOS CLOCK.BAT prompts DATE/TIME and returns via CALL before DOSKEY, all original modes unchanged")
 
     print("PASS C:\\DOS\\LS.BAT delegates to DIR and forwards nine DOS 6.22 batch arguments; DOS PATH verified")
     print("PASS TR73216 original verified native 320x200 driver and no PAN.EXE in NOPAN16 WIN.INI")
