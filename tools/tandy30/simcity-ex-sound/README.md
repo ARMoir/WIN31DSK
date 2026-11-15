@@ -2,14 +2,23 @@
 
 For **Tandy 1000 EX** (NEC V20/8088 class), not a Windows sound driver. This project intercepts the later Tandy SL/TL digital-sound BIOS API and attempts to translate unsigned 8-bit PCM *amplitude envelopes* into sound on the EX's built-in 3-voice/noise PSG. **It is not a real DAC emulator.** The EX has no DAC, and SimCity compatibility is not yet verified on actual hardware.
 
+## Hardware issue reported: hang after install message
+
+The first real Tandy 1000 EX run on November 15, 2026 printed the SCEXSND 0.1 installation message but did **not** return to the DOS prompt. **Do not run SCEXSND.COM again until this is debugged.** Reboot clears the resident interrupt hooks; keep this experiment out of AUTOEXEC.BAT.
+
+**Next isolated test:** `TSRPROBE.COM` does not touch either BIOS interrupt vector or sound hardware. After reboot, run it once at the DOS prompt and see whether `C:\\SIMCITY>` returns immediately. If it does, DOS AH=31h terminate-and-stay-resident works on the EX and the hang is likely in our interrupt-hook setup. If it also hangs, the basic TSR exit path requires investigation. Reboot afterward; the tiny test stays resident until a reboot. Do **not** run SCEXSND as part of this test.
+
 ## Files
 
+- **TSRPROBE.COM** — 96-byte non-sound DOS TSR termination diagnostic; installs **no** interrupt hooks. Next hardware test.
 - **SCEXSND.COM** — tiny resident driver (INT 1Ah AH=81h status, 83h play, 84h stop, 85h reset; INT 1Ch timer and INT 15h AX=91FBh completion).
 - **TESTSND.COM** — audible hardware test; verifies the BIOS status, second-call busy response and completion.
 - **SCEXSND.S / TESTSND.S** — source, assembled as DOS .COM with GNU binutils.
 - **BUILD.SH** — reproducible Linux build; run with `sh BUILD.SH`.
 
-## Testing on the real EX
+## Original test plan (paused: installation hang on real EX)
+
+**Do not proceed with this original sequence until the installer hang is resolved.**
 
 Copy both COM files to your CF card (for example `C:\SIMCITY`). At a DOS prompt:
 
