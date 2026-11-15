@@ -1,0 +1,38 @@
+name: Tandy 1000 EX SimCity sound shim - DOS build and test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [TANDY30]
+    paths:
+      - '.github/workflows/tandy30-simcity-ex-sound.yml'
+      - 'tools/tandy30/simcity-ex-sound/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build original V20-compatible DOS COM executables
+        run: sh tools/tandy30/simcity-ex-sound/BUILD.SH
+      - name: Run static build and payload checks
+        run: python3 tools/tandy30/simcity-ex-sound/test_build.py
+      - name: Verify bundled test binaries reproduce identically
+        run: |
+          cd tools/tandy30/simcity-ex-sound
+          echo 'd91e7c2d8688e01bd664d66af3c9c5b3a86ded8a85a006e75b5922c273509871  SCEXSND.COM' | sha256sum -c -
+          echo 'e42a702ea3edb3ee60e00c37c9a20372b27de128c4ab9f9d98cbac6cba6e5da9  TESTSND.COM' | sha256sum -c -
+      - name: Upload two DOS executables and testing instructions
+        uses: actions/upload-artifact@v4
+        with:
+          name: SCEXSND_TANDY_EX_EXPERIMENT
+          path: |
+            tools/tandy30/simcity-ex-sound/SCEXSND.COM
+            tools/tandy30/simcity-ex-sound/TESTSND.COM
+            tools/tandy30/simcity-ex-sound/README.md
+          retention-days: 30
+          if-no-files-found: error
