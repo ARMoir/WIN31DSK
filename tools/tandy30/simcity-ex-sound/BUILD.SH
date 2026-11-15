@@ -11,5 +11,7 @@ for name in HOOK1A HOOK1C; do
   as --32 -o "$name.o" "$name.S"
   ld -m elf_i386 -Ttext 0x100 -e start --oformat binary -o "$name.COM" "$name.o"
 done
-rm -f SCEXSND.o TESTSND.o TSRPROBE.o HOOK1A.o HOOK1C.o
-printf 'Built: '; wc -c SCEXSND.COM TESTSND.COM TSRPROBE.COM HOOK1A.COM HOOK1C.COM
+as --32 -o SCGATE.o SCGATE.S
+ld -m elf_i386 -Ttext 0x100 -e start --oformat binary -o SCGATE.COM SCGATE.o
+rm -f SCEXSND.o TESTSND.o TSRPROBE.o HOOK1A.o HOOK1C.o SCGATE.o
+printf 'Built: '; wc -c SCEXSND.COM TESTSND.COM TSRPROBE.COM HOOK1A.COM HOOK1C.COM SCGATE.COM

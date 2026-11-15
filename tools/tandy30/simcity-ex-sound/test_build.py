@@ -50,4 +50,17 @@ for name, interrupt in (('HOOK1A', 0x1A), ('HOOK1C', 0x1C)):
     assert bytes((0xB8, other, 0x25)) not in code, f'{name}: other interrupt vector modified'
     print(f'PASS: {name} one-vector chain only ({len(code)} bytes)')
 
+gate = (root / 'SCGATE.COM').read_bytes()
+gate_src = (root / 'SCGATE.S').read_text()
+assert len(gate) == 128, 'Unexpected size of status-only diagnostic'
+assert gate[:2] == b'\x0e\x1f'
+assert b'\xb8\x1a\x35\xcd\x21' in gate
+assert b'\xb8\x1a\x25\xcd\x21' in gate
+assert b'\xb8\x00\x31\xcd\x21' in gate
+assert b'\x80\xfc\x81' in gate, 'Missing AH=81h gate'
+assert b'\xb8\xc4\x00' in gate, 'Status must return AX=00C4'
+assert b'\x2e\xff\x2e' in gate, 'Unhandled BIOS calls must chain'
+assert b'\xba\xc0\x00' not in gate
+assert '0x251c' not in gate_src and 'out ' not in gate_src
+print('PASS: SCGATE status-only BIOS interception without sound/timer hook')
 print('NOTE: SimCity compatibility and actual audio require real EX testing.')

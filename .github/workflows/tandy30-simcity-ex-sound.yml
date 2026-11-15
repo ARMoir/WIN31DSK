@@ -23,6 +23,7 @@ jobs:
           echo 'd91e7c2d8688e01bd664d66af3c9c5b3a86ded8a85a006e75b5922c273509871  SCEXSND.COM' | sha256sum -c -
           echo 'e42a702ea3edb3ee60e00c37c9a20372b27de128c4ab9f9d98cbac6cba6e5da9  TESTSND.COM' | sha256sum -c -
           echo 'cc9bc2679d0fb433e389a37fdb81ace8ba8c771c01cd2d474bedf926cdd757c7  TSRPROBE.COM' | sha256sum -c -
+          echo 'f47360b9965b167a9eb47e2279e4628e4e61f9d99e47c44ab1bb66c6452e3946  SCGATE.COM' | sha256sum -c -
       - name: Build original V20-compatible DOS COM executables
         run: sh tools/tandy30/simcity-ex-sound/BUILD.SH
       - name: Run static build and payload checks
@@ -37,6 +38,7 @@ jobs:
             tools/tandy30/simcity-ex-sound/TSRPROBE.COM
             tools/tandy30/simcity-ex-sound/HOOK1A.COM
             tools/tandy30/simcity-ex-sound/HOOK1C.COM
+            tools/tandy30/simcity-ex-sound/SCGATE.COM
             tools/tandy30/simcity-ex-sound/README.md
           retention-days: 30
           if-no-files-found: error
