@@ -35,6 +35,8 @@ jobs:
             tools/tandy30/simcity-ex-sound/SCEXSND.COM
             tools/tandy30/simcity-ex-sound/TESTSND.COM
             tools/tandy30/simcity-ex-sound/TSRPROBE.COM
+            tools/tandy30/simcity-ex-sound/HOOK1A.COM
+            tools/tandy30/simcity-ex-sound/HOOK1C.COM
             tools/tandy30/simcity-ex-sound/README.md
           retention-days: 30
           if-no-files-found: error

@@ -6,10 +6,20 @@ For **Tandy 1000 EX** (NEC V20/8088 class), not a Windows sound driver. This pro
 
 The first real Tandy 1000 EX run on November 15, 2026 printed the SCEXSND 0.1 installation message but did **not** return to the DOS prompt. **Do not run SCEXSND.COM again until this is debugged.** Reboot clears the resident interrupt hooks; keep this experiment out of AUTOEXEC.BAT.
 
-**Next isolated test:** `TSRPROBE.COM` does not touch either BIOS interrupt vector or sound hardware. After reboot, run it once at the DOS prompt and see whether `C:\\SIMCITY>` returns immediately. If it does, DOS AH=31h terminate-and-stay-resident works on the EX and the hang is likely in our interrupt-hook setup. If it also hangs, the basic TSR exit path requires investigation. Reboot afterward; the tiny test stays resident until a reboot. Do **not** run SCEXSND as part of this test.
+**Hardware result:** `TSRPROBE.COM` returned to `C:\SIMCITY>` on November 15, 2026. Plain DOS TSR termination works; original `SCEXSND.COM` remains unsafe after it hung during installation.
+
+**Next two isolated tests (never load the original sound shim):**
+
+1. Reboot, run `HOOK1A` from a normal DOS prompt. It hooks only INT 1Ah and forwards every call unchanged to the original BIOS, without sound or timer code. Confirm the DOS prompt returns and stays responsive for at least 10 seconds.
+2. Reboot **again** before running `HOOK1C`. This hooks only INT 1Ch and forwards timer callbacks unchanged. Confirm prompt return and responsiveness for at least 10 seconds.
+3. Reboot again to clear the hooks. Report which one passed or hung.
+
+**Always test them in separate boots.** Do not install either into AUTOEXEC.BAT; do not combine either with SCEXSND or each other. Do not try to launch SimCity during this isolation test.
 
 ## Files
 
+- **HOOK1A.COM** — 112-byte INT 1Ah pass-through, no sound or timer hook.
+- **HOOK1C.COM** — 112-byte INT 1Ch pass-through, no sound or INT 1Ah hook.
 - **TSRPROBE.COM** — 96-byte non-sound DOS TSR termination diagnostic; installs **no** interrupt hooks. Next hardware test.
 - **SCEXSND.COM** — tiny resident driver (INT 1Ah AH=81h status, 83h play, 84h stop, 85h reset; INT 1Ch timer and INT 15h AX=91FBh completion).
 - **TESTSND.COM** — audible hardware test; verifies the BIOS status, second-call busy response and completion.

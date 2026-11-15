@@ -34,4 +34,20 @@ assert '0x3100' in probe_src and '0x251a' not in probe_src and '0x251c' not in p
 print('PASS: no-hook 96-byte TSR diagnostic')
 print('PASS: binary size, DOS format, BIOS hooks, PSG port, test PCM, rate bounds')
 print(f'SCEXSND.COM: {len(driver)} bytes; TESTSND.COM: {len(test)} bytes')
+# Isolate interrupts independently. Probes must be pure pass-through.
+for name, interrupt in (('HOOK1A', 0x1A), ('HOOK1C', 0x1C)):
+    code = (root / (name + '.COM')).read_bytes()
+    src = (root / (name + '.S')).read_text()
+    assert code[:2] == b'\x0e\x1f', f'{name}: initialize DS=CS'
+    assert 64 <= len(code) < 256, f'{name}: unexpected size'
+    assert bytes((0xB8, interrupt, 0x35)) in code, f'{name}: missing old vector read'
+    assert bytes((0xB8, interrupt, 0x25)) in code, f'{name}: missing hook'
+    assert b'\x2e\xff\x2e' in code, f'{name}: far JMP must use CS override'
+    assert b'\xb8\x00\x31\xcd\x21' in code, f'{name}: missing TSR DOS termination'
+    assert 'jmp far ptr cs:[old_vector]' in src
+    assert 'out ' not in src and 'int 0x15' not in src
+    other = 0x1A if interrupt == 0x1C else 0x1C
+    assert bytes((0xB8, other, 0x25)) not in code, f'{name}: other interrupt vector modified'
+    print(f'PASS: {name} one-vector chain only ({len(code)} bytes)')
+
 print('NOTE: SimCity compatibility and actual audio require real EX testing.')
