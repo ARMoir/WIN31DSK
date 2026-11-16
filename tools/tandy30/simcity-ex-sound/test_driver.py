@@ -9,12 +9,16 @@ binary = (base / 'SCEXSND.COM').read_bytes()
 tester = (base / 'TESTSND.COM').read_bytes()
 src = (base / 'SCEXSND.S').read_text()
 testsrc = (base / 'TESTSND.S').read_text()
-assert len(binary) == 1008, f'Unexpected driver size: {len(binary)}'
+assert len(binary) == 1312, f'Unexpected driver size: {len(binary)}'
 assert len(tester) == 544, f'Unexpected sound test size: {len(tester)}'
 assert binary[:2] == b'\x0e\x1f' and tester[:2] == b'\x0e\x1f'
-assert b'SCEXSND 0.31' in binary and b'SCEXSND 0.31' in tester
+assert b'SCEXSND 0.32' in binary and b'SCEXSND 0.32' in tester
 assert 'noise_mode:' in src and 'noise_already:' in src and 'add ax,3' in src
 assert 'mov al,0xe5' in src and 'add al,2' in src
+assert 'mov dx,3' in src, "Tandy sample rate must use 3.579545MHz clock"
+assert 'cmp dx,0x0300' in src
+assert 'synth_short_effect:' in src and 'effect_type:' in src
+assert all(f'cmp cx,{n}' in src for n in (384,768,1536))
 assert b'\xba\xc0\x00' in binary
 assert 'out dx,al' in src and 'old1a' in src and 'old1c' in src
 assert 'add word ptr [pcm_seg],0x1000' in src, '64 KB linear pointer handling missing'
@@ -55,5 +59,9 @@ assert 450 < divisors[0][1] < 550, divisors
 assert any(215<hz<285 for off,hz,n in divisors if 1500<=off<=2100), divisors
 assert any(550<hz<850 for off,hz,n in divisors if 2100<=off<=3000), divisors
 assert any(n for off,hz,n in divisors if off>3000), divisors
+assert (3*65536)//768 == 256
+assert [384,768,1536] == [2*n for n in (192,384,768)]
+assert abs((3579545/768) / 18.2065 - 256) < 1.0
+assert len(set([384,768,1536])) == 3
 print(f'PASS: 8086-only instruction audit ({len(ops)} ops), TSR buffer math, 3 tone regions and noise classification.')
 print('NOTE: This is not an audible real-hardware or actual SimCity test.')

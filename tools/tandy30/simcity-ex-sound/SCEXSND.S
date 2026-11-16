@@ -79,7 +79,9 @@ bios_handler:
     mov ax, 0x00c4
     and word ptr ss:[bp+6], 0xfffe
     cmp byte ptr [active], 0
-    je bios_done
+    jne status_busy
+    jmp bios_done
+status_busy:
     or word ptr ss:[bp+6], 1
     jmp bios_done
 not_status:
@@ -101,6 +103,26 @@ new_play:
     test cx, cx
     jz bios_done
     mov [remaining],cx
+    /* Recognize the three short v1.02 SOUNDDAT.V4 blocks by their exact
+       expanded lengths, ONLY at the original BIOS rate DX=0300h. */
+    mov byte ptr [effect_type],0
+    mov byte ptr [effect_age],0
+    cmp dx,0x0300
+    jne generic_play
+    cmp cx,384             /* block 5: 0.082s short sample */
+    jne not_short_click
+    mov byte ptr [effect_type],1
+    jmp generic_play
+not_short_click:
+    cmp cx,768             /* block 6: 0.165s sample */
+    jne not_grind
+    mov byte ptr [effect_type],2
+    jmp generic_play
+not_grind:
+    cmp cx,1536            /* block 7: 0.330s sample */
+    jne generic_play
+    mov byte ptr [effect_type],3
+generic_play:
     mov [caller_volume],al
     and byte ptr [caller_volume],7
     mov si,bx
@@ -113,12 +135,14 @@ new_play:
     mov [pcm_off],bx
     mov bx,dx
     and bx,0x0fff
-    cmp bx,2
+    cmp bx,4
     jae rate_valid
-    mov bx,2
+    mov bx,4
 rate_valid:
     mov [sample_delay],bx
-    mov dx,1
+    /* Tandy DAC clock is 3.579545MHz, not the 1.193182MHz PIT clock.
+       196608 / divisor bytes per 18.2Hz tick (v0.31 used 65536). */
+    mov dx,3
     xor ax,ax
     div bx
     mov [bytes_per_tick],ax
@@ -158,6 +182,11 @@ timer_active:
     mov ax,[remaining]
 step_ok:
     mov [tick_step],ax
+    cmp byte ptr [effect_type],0
+    je analyze_generic
+    call synth_short_effect
+    jmp skip_analysis
+analyze_generic:
     cmp ax, 12
     jae can_analyze
     jmp skip_analysis
@@ -412,6 +441,121 @@ silence_all:
     pop dx
     pop ax
     ret
+/* Three distinct short-sound PSG profiles, derived from the v1.02
+   sound-block lengths and v2.00 timbre references; no samples included.
+   Attribution to bulldozer/road is provisional until gameplay confirmed. */
+synth_short_effect:
+    push ax
+    push bx
+    push dx
+    cmp byte ptr [caller_volume],0
+    jne short_audible
+    call silence_all
+    jmp short_done
+short_audible:
+    mov al,7
+    sub al,[caller_volume]
+    mov [effect_att],al
+    cmp byte ptr [effect_type],2
+    jne not_short_grind
+    /* 0.165s low mechanical loop: descending rumble and restrained noise */
+    mov bx,860
+    cmp byte ptr [effect_age],0
+    je grind_pitch_set
+    mov bx,940
+    cmp byte ptr [effect_age],1
+    je grind_pitch_set
+    mov bx,1023
+grind_pitch_set:
+    mov al,0x80
+    call set_tone
+    mov bx,720
+    mov al,0xa0
+    call set_tone
+    mov bx,590
+    mov al,0xc0
+    call set_tone
+    mov dx,0xc0
+    mov al,[effect_att]
+    or al,0x90
+    out dx,al
+    mov al,[effect_att]
+    add al,2
+    or al,0xb0
+    out dx,al
+    mov al,[effect_att]
+    add al,4
+    or al,0xd0
+    out dx,al
+    mov al,0xe5
+    out dx,al
+    mov al,[effect_att]
+    add al,6
+    or al,0xf0
+    out dx,al
+    jmp short_done
+not_short_grind:
+    cmp byte ptr [effect_type],1
+    jne short_medium
+    /* 0.082s high, decaying two-tone click */
+    mov bx,140
+    cmp byte ptr [effect_age],0
+    je click_pitch
+    mov bx,175
+click_pitch:
+    mov al,0x80
+    call set_tone
+    mov bx,225
+    mov al,0xa0
+    call set_tone
+    mov dx,0xc0
+    mov al,[effect_att]
+    cmp byte ptr [effect_age],0
+    je click_volume
+    add al,7
+click_volume:
+    or al,0x90
+    out dx,al
+    mov al,[effect_att]
+    add al,4
+    or al,0xb0
+    out dx,al
+    mov al,0xdf
+    out dx,al
+    mov al,0xff
+    out dx,al
+    jmp short_done
+short_medium:
+    /* 0.330s brighter two-note effect */
+    mov bx,275
+    cmp byte ptr [effect_age],2
+    jb medium_pitch
+    mov bx,325
+medium_pitch:
+    mov al,0x80
+    call set_tone
+    mov bx,390
+    mov al,0xa0
+    call set_tone
+    mov dx,0xc0
+    mov al,[effect_att]
+    or al,0x90
+    out dx,al
+    mov al,[effect_att]
+    add al,3
+    or al,0xb0
+    out dx,al
+    mov al,0xdf
+    out dx,al
+    mov al,0xff
+    out dx,al
+short_done:
+    inc byte ptr [effect_age]
+    pop dx
+    pop bx
+    pop ax
+    ret
+
 old1a:          .word 0,0
 old1c:          .word 0,0
 active:         .byte 0
@@ -420,6 +564,9 @@ last_sign:      .byte 0
 window_count:   .byte 0
 attenuation:    .byte 15
 noise_mode:     .byte 0
+effect_type:    .byte 0
+effect_age:     .byte 0
+effect_att:     .byte 15
 min_sample:     .byte 255
 max_sample:     .byte 0
 pcm_off:        .word 0
@@ -430,7 +577,7 @@ tick_step:      .word 0
 sample_delay:   .word 0
 crossings:      .word 0
 divider:        .word 0
-installed:      .ascii "SCEXSND 0.31: EX 3-voice audio synthesis enabled. Reboot to unload.\r\n$"
+installed:      .ascii "SCEXSND 0.32: EX 3-voice audio synthesis enabled. Reboot to unload.\r\n$"
 already:        .ascii "SCEXSND is already installed.\r\n$"
 .align 16
 resident_end:

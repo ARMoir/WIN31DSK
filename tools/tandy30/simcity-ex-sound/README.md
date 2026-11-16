@@ -1,24 +1,19 @@
-# SimCity EX Sound Driver v0.31
+# SCEXSND v0.32 — sound for original DOS SimCity on a Tandy 1000 EX
 
-**Experimental, real-hardware sound quality not yet verified.** Target: Tandy 1000 EX, NEC V20 / 8088-compatible CPU, DOS 6.22, original 1989 DOS SimCity.
+8086/V20-compatible real-mode DOS TSR. Emulates later SL/TL digital sound BIOS (INT 1Ah, AH=81h/83h/84h/85h), synthesizing approximate sound through the EX's original three-voice/noise generator at port 0C0h. MIT licensed.
 
-## Real EX hardware feedback and v0.31 tuning
+## Upgrade from hardware-tested v0.31
 
-v0.30 was confirmed working on a Tandy 1000 EX, including audible sound with original SimCity. The gameplay recording showed fairly quiet effects at maximum volume and somewhat messy disasters.
+- **Correct playback speed:** Original SimCity DOS v1.02 calls the Tandy BIOS with DX=0300h. The DAC is clocked at approximately 3.579545 MHz, not the 1.193 MHz PC timer used by v0.31's playback step. v0.32 advances 256 bytes per 18.2-Hz tick rather than ~85, eliminating 3x stretched effects.
+- **Three distinct short sound profiles:** Original SOUNDDAT.V4 includes blocks that expand to 384, 768, and 1,536 PCM bytes. At the game's exact DX=0300h playback setting these now have separate PSG renditions: a high fading click, a low mechanically rattling/descending loop, and a medium bright two-note effect. Other samples keep the v0.31 pitch-envelope converter.
+- **Reference from newer v2.00:** BULLLOOP.VOC is a low, rough 0.164-second mechanical effect; PLOP.VOC is a high, fast 0.126-second click. No proprietary audio is included.
+- **CPU safety:** Branches are audited for 8086-compatible opcodes. The original v0.1 hang was caused by a 386-only conditional branch; v0.32's expanded code has been checked for that problem.
 
-**v0.31** adds +3 PSG gain steps to the PCM envelope (preserving its dynamic range), raises the octave and bass voice levels two steps, lowers the noise pitch and adds a small hysteresis band to reduce chatter between tone/noise modes. This is intended to sound louder and smoother without making disasters harsh; **v0.31 is not yet hardware-tested.**
+**Important:** The 0.165s v1.02 block and v2.00 BULLLOOP have matching duration, but waveform analysis did *not* establish that they are the same in-game sound. The 384/768/1536 mappings are distinct data blocks, not proven names for the bulldozer/road buttons. If both tools trigger the exact same sample, we will need an action-aware game patch rather than a pure BIOS shim to separate them.
 
-**SCEX30.COM** is the exact old hardware-tested v0.30 binary. To roll back, reboot, copy it over SCEXSND.COM, then run SCEXSND again. Do not stack resident versions.
+## Test on your real Tandy EX
 
-## What changed
-
-v0.30 replaced the original noise-envelope-only driver with **PSG resynthesis**. A tiny resident program intercepts later Tandy SL/TL digital BIOS calls (INT 1Ah AH=81h/83h/84h/85h), analyzes at most 64 PCM samples per 18.2 Hz BIOS clock tick, estimates fundamental pitch from zero crossings, scales loudness from the signal envelope, and drives all **three independent Tandy SN76489 tone channels** (fundamental, octave, suboctave). It switches to the PSG noise channel for high-frequency/transient material. It uses I/O port 0xC0, does not reprogram the PIT or DMA, and avoids 386/286 instructions.
-
-**Not a DAC:** the EX cannot output arbitrary PCM faithfully. This technique may sound fuller than a PC speaker for some effects and worse for others. v0.30 is confirmed operating with the original DOS game on EX hardware; v0.31's sound quality is not yet verified.
-
-## Real Tandy EX test
-
-Reboot first to clear all older sound/diagnostic TSRs. Back up your functioning CF image. Copy **both** v0.31 COM files to `C:\SIMCITY` and run from DOS:
+Reboot first to unload the old TSR. Copy SCEXSND.COM and TESTSND.COM to the SimCity folder and run from **plain DOS**, not Windows:
 
 ```dos
 C:
@@ -28,27 +23,14 @@ TESTSND
 SIMCITY
 ```
 
-Expected installation line: **SCEXSND 0.31: EX 3-voice audio synthesis enabled.** `TESTSND` should play a short changing-pitch effect followed by a noisy sound, confirm busy status, and return to DOS. Then compare the actual SimCity audio against the game's IBM/PC-speaker option. If SimCity still announces "Tandy sound BIOS missing", or sounds worse than the PC speaker, this approach is not yet good enough; no additional diagnostic round is required.
+TESTSND is optional. SCEXSND should announce **v0.32** and immediately return to DOS. Start SimCity once the TSR is installed. Compare bulldozing, placing roads, and disaster effects. This is a single in-game comparison, not a request for a new series of diagnostics.
 
-Do not add it to AUTOEXEC.BAT while experimental. Driver remains loaded once per boot; **reboot to unload**. Stop testing and reboot if the machine hangs. Do not run under Windows 3.0 or stack with HOOK1A, HOOK1C or SCGATE.
+**Do not put it in AUTOEXEC.BAT yet** or stack with old HOOK/SCGATE tests. Reboot to unload. If it hangs, reboot and restore the proven v0.31 binary by copying **SCEX31.COM to SCEXSND.COM**; its matching TEST31.COM is also saved. No boot image or Windows 3.0 file is changed.
 
-## Hardware findings and fix
+## Tests and limitations
 
-November 15, 2026: v0.1 printed its installation message but hung. `TSRPROBE`, `HOOK1A`, `HOOK1C` and `SCGATE` returned normally on real EX hardware. The original driver used assembler-generated long conditional jumps, which could encode 386-only 0F 8x opcodes. v0.30 uses short conditional jumps, safe near unconditional jumps and an explicit instruction-stream audit. The playback path is rewritten; static build tests and a mathematical sound model pass, **not a substitute for EX testing**.
+`BUILD.SH` uses GNU binutils. `test_driver.py` audits 8086 opcode support, Tandy BIOS hooks, the 3.579MHz playback timing, and unique effect-length cases. `test_build.py` includes the older diagnostic tests. `inspect_archives.py` optionally checks your own v1.02/v2.00 ZIPs locally without shipping any game data.
 
-## Micropolis reference
+**v0.32 has passed static checks only; actual EX audio quality remains unverified.** The EX has no DAC and cannot reproduce arbitrary 8-bit PCM faithfully. This synthesizer approximates effects using three square-wave oscillators and noise. Do not load this TSR on an SL/TL with a functioning digital BIOS.
 
-The [SimHacker/Micropolis repository](https://github.com/SimHacker/micropolis) supplies useful **sound-effect names and reference audio** (bulldozer, siren, explosion, etc.) in `MicropolisCore/res/sounds` and dispatch code in `micropolis-activity/src/sim/w_sound.c`. They are **Unix-era assets, not original DOS Tandy BIOS routines**; we have not copied their sound files or GPL code into this independently written MIT driver.
-
-## Files and limitations
-
-- `SCEXSND.COM`: 1008-byte resident driver.
-- `SCEX30.COM`: preserved working v0.30 driver.
-- `TESTSND.COM`: 544-byte DOS test generating its 4,096-byte PCM sample in RAM (three tones and noise). It has a 3-second busy timeout.
-- `SCEXSND.S`, `TESTSND.S`: assembly source; `BUILD.SH`: GNU binutils build; `test_build.py` and `test_driver.py`: static, ISA and sound-model checks.
-- Old diagnostic tools remain for history but are no longer required to try the replacement.
-- BIOS microphone recording (AH=82h) is not implemented; other INT 1Ah calls chain to the ROM. Completion sends INT 15h AX=91FBh.
-- If SimCity uses short samples with no discernible pitch, those parts may be muted; 18.2 Hz envelope updates limit precision. PSG effects can overwrite other simultaneously playing Tandy tones.
-- No proprietary SimCity, DOS, Windows, or Micropolis assets are included.
-
-References: [Tandy SL sound API](https://www.manualslib.com/manual/1219946/Tandy-1000-Sl.html?page=564), [playback convention](https://www.manualslib.com/manual/1219946/Tandy-1000-Sl.html?page=566), [DOSBox-X sound BIOS](https://dosbox-x.com/doxygen/html/bios_8cpp_source.html). MIT license: LICENSE.
+See [SOUND_RESEARCH.md](SOUND_RESEARCH.md) for the actual source-file measurements and their limitations.

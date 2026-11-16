@@ -125,10 +125,10 @@ fail_print:
     mov ax,0x4c01
     int 0x21
 started_tick: .word 0
-detected: .ascii "SCEXSND 0.31 detected; testing three-voice synthesis.\r\n$"
+detected: .ascii "SCEXSND 0.32 detected; testing three-voice synthesis.\r\n$"
 sounding: .ascii "BUSY test passed. Listen for several tones and noisy finish.\r\n$"
 success:  .ascii "PASS: sound completed; driver returned idle.\r\n$"
-missing:  .ascii "SCEXSND 0.31 not installed.\r\n$"
+missing:  .ascii "SCEXSND 0.32 not installed.\r\n$"
 busy:     .ascii "Driver is busy.\r\n$"
 not_busy: .ascii "FAIL: simultaneous playback was accepted.\r\n$"
 timeout:  .ascii "FAIL: timed out after 3 seconds. Reboot.\r\n$"
