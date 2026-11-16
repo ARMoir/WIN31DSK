@@ -36,8 +36,8 @@ jobs:
           cd tools/tandy30/simcity-ex-sound
           test "$(stat -c%s SCEXSND.COM)" -eq 1312
           test "$(stat -c%s TESTSND.COM)" -eq 544
-          strings SCEXSND.COM | grep -F 'SCEXSND 0.31:'
-          strings TESTSND.COM | grep -F 'SCEXSND 0.31 detected'
+          strings SCEXSND.COM | grep -F 'SCEXSND 0.32:'
+          strings TESTSND.COM | grep -F 'SCEXSND 0.32 detected'
       - name: Run static build and payload checks
         run: python3 tools/tandy30/simcity-ex-sound/test_build.py
       - name: Audit 8086 instructions and synthetic sample pitches
