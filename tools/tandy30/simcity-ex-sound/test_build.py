@@ -19,7 +19,7 @@ assert 'int 0x15' in source, 'Missing sound completion callback'
 assert 'old1a' in source and 'old1c' in source, 'Missing BIOS hook chaining'
 assert 'and word ptr ss:[bp+6], 0xfffe' in source, 'Missing carry flag clearing'
 assert 'or word ptr ss:[bp+6], 1' in source, 'Missing carry flag setting'
-assert b'SCEXSND 0.30 detected' in test, 'Unexpected test edition'
+assert b'SCEXSND 0.31 detected' in test, 'Unexpected test edition'
 assert b'BUSY test passed' in test
 assert b'\x0e\x1f' == test[:2]
 assert b'PASS: sound completed' in test

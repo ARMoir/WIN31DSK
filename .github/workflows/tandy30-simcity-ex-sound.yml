@@ -26,6 +26,11 @@ jobs:
           echo 'f47360b9965b167a9eb47e2279e4628e4e61f9d99e47c44ab1bb66c6452e3946  SCGATE.COM' | sha256sum -c -
       - name: Build original V20-compatible DOS COM executables
         run: sh tools/tandy30/simcity-ex-sound/BUILD.SH
+      - name: Verify freshly built binaries match checked-in executables
+        run: |
+          cd tools/tandy30/simcity-ex-sound
+          echo 'bc9b26c7f751f7f5fb357fdb6d71dc44ce01458d408da9ec51a151e4b5d0ece0  SCEXSND.COM' | sha256sum -c -
+          echo 'ed843532538d7939c1871fd52dbd453b41f07009e4ed64e4a2d30c71c83b96c5  TESTSND.COM' | sha256sum -c -
       - name: Run static build and payload checks
         run: python3 tools/tandy30/simcity-ex-sound/test_build.py
       - name: Audit 8086 instructions and synthetic sample pitches
