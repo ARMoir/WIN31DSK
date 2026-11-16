@@ -29,7 +29,7 @@ jobs:
           cd tools/tandy30/simcity-ex-sound
           echo 'bc9b26c7f751f7f5fb357fdb6d71dc44ce01458d408da9ec51a151e4b5d0ece0  SCEX31.COM' | sha256sum -c -
           echo 'ed843532538d7939c1871fd52dbd453b41f07009e4ed64e4a2d30c71c83b96c5  TEST31.COM' | sha256sum -c -
-      - name: Build original V20-compatible DOS COM executables
+      - name: Build baseline and experimental Platinum V20 DOS TSRs
         run: sh tools/tandy30/simcity-ex-sound/BUILD.SH
       - name: Verify rebuilt DOS format and sizes across GNU assembler versions
         run: |
@@ -42,12 +42,17 @@ jobs:
         run: python3 tools/tandy30/simcity-ex-sound/test_build.py
       - name: Audit 8086 instructions and synthetic sample pitches
         run: python3 tools/tandy30/simcity-ex-sound/test_driver.py
+      - name: Test eight-patch Platinum driver and 8086 safety
+        run: python3 tools/tandy30/simcity-ex-sound/test_platinum.py
       - name: Upload driver and sound test with instructions
         uses: actions/upload-artifact@v4
         with:
-          name: SCEXSND_TANDY_EX_3VOICE_v032
+          name: SCEXSND_TANDY_EX_PLATINUM_EXPERIMENTAL
           path: |
             tools/tandy30/simcity-ex-sound/SCEXSND.COM
+            tools/tandy30/simcity-ex-sound/SCPLAT.COM
+            tools/tandy30/simcity-ex-sound/SCPLAT.S
+            tools/tandy30/simcity-ex-sound/PLATINUM.md
             tools/tandy30/simcity-ex-sound/SCEX31.COM
             tools/tandy30/simcity-ex-sound/TEST31.COM
             tools/tandy30/simcity-ex-sound/SCEX30.COM
