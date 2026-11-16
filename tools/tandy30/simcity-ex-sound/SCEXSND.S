@@ -122,6 +122,7 @@ rate_valid:
     xor ax,ax
     div bx
     mov [bytes_per_tick],ax
+    mov byte ptr [noise_mode],0
     call silence_all
     mov byte ptr [active],1
 bios_done:
@@ -216,9 +217,10 @@ accumulate:
     div bx
     mov cl,3
     shr ax,cl
-    cmp ax,14
+    add ax,3                /* +3 PSG attenuation steps, preserves dynamics */
+    cmp ax,15
     jbe loudness_ok
-    mov ax,14
+    mov ax,15
 loudness_ok:
     mov bl,[caller_volume]
     mul bl
@@ -269,17 +271,32 @@ divider_below_max:
 divider_above_min:
     mov [divider],ax
     mov dx,0xc0
+    /* Two-count hysteresis: no abrupt 18Hz tone/noise oscillation. */
     mov ax,[crossings]
     mov bl,[window_count]
     shr bl,1
     shr bl,1
     shr bl,1
     xor bh,bh
+    cmp byte ptr [noise_mode],0
+    jne noise_already
+    add bx,2
     cmp ax,bx
-    jbe pitched_effect
-    mov al,0xe4
+    ja noisy_effect
+    jmp pitched_effect
+noise_already:
+    cmp ax,bx
+    jb pitched_effect
+noisy_effect:
+    mov byte ptr [noise_mode],1
+    mov al,0xe5          /* lower noise pitch, smoother for disasters */
     out dx,al
     mov al,[attenuation]
+    add al,4             /* noise stays below the strengthened tone channels */
+    cmp al,15
+    jbe noise_level_ready
+    mov al,15
+noise_level_ready:
     or al,0xf0
     out dx,al
     mov al,0x9f
@@ -290,6 +307,7 @@ divider_above_min:
     out dx,al
     jmp skip_analysis
 pitched_effect:
+    mov byte ptr [noise_mode],0
     mov bx,[divider]
     mov al,0x80
     call set_tone
@@ -316,7 +334,7 @@ suboctave_ok:
     or al,0x90
     out dx,al
     mov al,[attenuation]
-    add al,4
+    add al,2
     cmp al,15
     jbe vol1_ready
     mov al,15
@@ -324,7 +342,7 @@ vol1_ready:
     or al,0xb0
     out dx,al
     mov al,[attenuation]
-    add al,6
+    add al,4
     cmp al,15
     jbe vol2_ready
     mov al,15
@@ -401,6 +419,7 @@ caller_volume:  .byte 0
 last_sign:      .byte 0
 window_count:   .byte 0
 attenuation:    .byte 15
+noise_mode:     .byte 0
 min_sample:     .byte 255
 max_sample:     .byte 0
 pcm_off:        .word 0
@@ -411,7 +430,7 @@ tick_step:      .word 0
 sample_delay:   .word 0
 crossings:      .word 0
 divider:        .word 0
-installed:      .ascii "SCEXSND 0.30: EX 3-voice audio synthesis enabled. Reboot to unload.\r\n$"
+installed:      .ascii "SCEXSND 0.31: EX 3-voice audio synthesis enabled. Reboot to unload.\r\n$"
 already:        .ascii "SCEXSND is already installed.\r\n$"
 .align 16
 resident_end:

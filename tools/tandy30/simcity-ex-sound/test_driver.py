@@ -9,9 +9,12 @@ binary = (base / 'SCEXSND.COM').read_bytes()
 tester = (base / 'TESTSND.COM').read_bytes()
 src = (base / 'SCEXSND.S').read_text()
 testsrc = (base / 'TESTSND.S').read_text()
-assert len(binary) == 960, f'Unexpected driver size: {len(binary)}'
+assert len(binary) == 1008, f'Unexpected driver size: {len(binary)}'
 assert len(tester) == 544, f'Unexpected sound test size: {len(tester)}'
 assert binary[:2] == b'\x0e\x1f' and tester[:2] == b'\x0e\x1f'
+assert b'SCEXSND 0.31' in binary and b'SCEXSND 0.31' in tester
+assert 'noise_mode:' in src and 'noise_already:' in src and 'add ax,3' in src
+assert 'mov al,0xe5' in src and 'add al,2' in src
 assert b'\xba\xc0\x00' in binary
 assert 'out dx,al' in src and 'old1a' in src and 'old1c' in src
 assert 'add word ptr [pcm_seg],0x1000' in src, '64 KB linear pointer handling missing'
@@ -35,6 +38,10 @@ assert len(ops) > 200, 'Too few instructions examined'
 pcm = bytes([64]*8+[192]*8)*64 + bytes([48]*16+[208]*16)*32
 pcm += bytes([54]*6+[202]*6)*85 + bytes([128])*4
 pcm += bytes([12,202,235,43,230,6,145,111])*128
+def atten(avg,volume=7):
+    return 15 - min(15, (avg >> 3)+3)*volume//7
+assert atten(0)==12 and atten(16)==10 and atten(48)==6 and atten(96)==0
+assert atten(16,0)==15
 assert len(pcm)==4096
 divisors=[]
 step=65536//150

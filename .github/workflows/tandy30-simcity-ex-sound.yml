@@ -20,8 +20,8 @@ jobs:
       - name: Verify checked-in DOS binaries before rebuilding
         run: |
           cd tools/tandy30/simcity-ex-sound
-          echo 'a7e6ef90618f3e83da5b1b5bedb10cb764990ecaac25884d143c71cc9ca9a91c  SCEXSND.COM' | sha256sum -c -
-          echo '2dc1aacec0f1f66c146fc3df0ecccda4bef68647d29a0240c5a575240c247ae4  TESTSND.COM' | sha256sum -c -
+          echo 'bc9b26c7f751f7f5fb357fdb6d71dc44ce01458d408da9ec51a151e4b5d0ece0  SCEXSND.COM' | sha256sum -c -
+          echo 'ed843532538d7939c1871fd52dbd453b41f07009e4ed64e4a2d30c71c83b96c5  TESTSND.COM' | sha256sum -c -
           echo 'cc9bc2679d0fb433e389a37fdb81ace8ba8c771c01cd2d474bedf926cdd757c7  TSRPROBE.COM' | sha256sum -c -
           echo 'f47360b9965b167a9eb47e2279e4628e4e61f9d99e47c44ab1bb66c6452e3946  SCGATE.COM' | sha256sum -c -
       - name: Build original V20-compatible DOS COM executables
@@ -33,9 +33,10 @@ jobs:
       - name: Upload driver and sound test with instructions
         uses: actions/upload-artifact@v4
         with:
-          name: SCEXSND_TANDY_EX_3VOICE_v030
+          name: SCEXSND_TANDY_EX_3VOICE_v031
           path: |
             tools/tandy30/simcity-ex-sound/SCEXSND.COM
+            tools/tandy30/simcity-ex-sound/SCEX30.COM
             tools/tandy30/simcity-ex-sound/TESTSND.COM
             tools/tandy30/simcity-ex-sound/TSRPROBE.COM
             tools/tandy30/simcity-ex-sound/HOOK1A.COM
