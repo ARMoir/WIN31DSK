@@ -52,8 +52,6 @@ jobs:
             tools/tandy30/simcity-ex-sound/SCEXSND.COM
             tools/tandy30/simcity-ex-sound/SCPLAT.COM
             tools/tandy30/simcity-ex-sound/TESTPLAT.COM
-            tools/tandy30/simcity-ex-sound/SCPLAT.S
-            tools/tandy30/simcity-ex-sound/PLATINUM.md
             tools/tandy30/simcity-ex-sound/SCEX31.COM
             tools/tandy30/simcity-ex-sound/TEST31.COM
             tools/tandy30/simcity-ex-sound/SCEX30.COM
@@ -62,6 +60,5 @@ jobs:
             tools/tandy30/simcity-ex-sound/HOOK1A.COM
             tools/tandy30/simcity-ex-sound/HOOK1C.COM
             tools/tandy30/simcity-ex-sound/SCGATE.COM
-            tools/tandy30/simcity-ex-sound/README.md
           retention-days: 30
           if-no-files-found: error
