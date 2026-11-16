@@ -21,8 +21,8 @@ assert "int 0x21" not in src[src.index("int1c_entry:"):src.index("\nold1a:")]
 assert "call silence_all" in src and "int 0x15" in src
 assert "jmp far ptr cs:[old1c]" in src and "jmp far ptr cs:[old1a]" in src or "jmp far ptr cs:[old1c]" in src and "jmp far ptr cs:[old1a]" not in src
 sym = subprocess.check_output(["nm","-n",str(root/"SCPLAT.o")],text=True)
-match = re.search(r"^([0-9a-f]+) [A-Za-z] old1a$",sym,re.M)
-assert match, "Resident data boundary not found"
+match = re.search(r"^([0-9a-f]+) [A-Za-z] platinum_patch_ptrs$",sym,re.M)
+assert match, "Platinum data boundary not found"
 dis = subprocess.check_output(["objdump","-d","-m","i8086",
     "--stop-address=" + str(int(match[1],16)),str(root/"SCPLAT.o")],text=True)
 ops = []
