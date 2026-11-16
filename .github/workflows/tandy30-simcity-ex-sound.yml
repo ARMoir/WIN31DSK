@@ -51,6 +51,7 @@ jobs:
           path: |
             tools/tandy30/simcity-ex-sound/SCEXSND.COM
             tools/tandy30/simcity-ex-sound/SCPLAT.COM
+            tools/tandy30/simcity-ex-sound/TESTPLAT.COM
             tools/tandy30/simcity-ex-sound/SCPLAT.S
             tools/tandy30/simcity-ex-sound/PLATINUM.md
             tools/tandy30/simcity-ex-sound/SCEX31.COM
