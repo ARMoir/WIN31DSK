@@ -34,3 +34,7 @@ TESTSND is optional. SCEXSND should announce **v0.32** and immediately return to
 **v0.32 has passed static checks only; actual EX audio quality remains unverified.** The EX has no DAC and cannot reproduce arbitrary 8-bit PCM faithfully. This synthesizer approximates effects using three square-wave oscillators and noise. Do not load this TSR on an SL/TL with a functioning digital BIOS.
 
 See [SOUND_RESEARCH.md](SOUND_RESEARCH.md) for the actual source-file measurements and their limitations.
+
+## Miles Tandy driver reference
+
+The proprietary v2.00 `TANDY.ADV` music driver has been disassembled for research, without copying its code or assets. See [TANDY_ADV_ANALYSIS.md](TANDY_ADV_ANALYSIS.md) for the verified PSG note, volume, voice allocation, and audio routing details, and their limits for our v1.02 digital-effects TSR.
