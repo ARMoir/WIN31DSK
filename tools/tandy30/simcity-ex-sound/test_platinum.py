@@ -12,6 +12,13 @@ assert len(base) == 1312, "Original v0.32 was unexpectedly altered"
 assert 1100 < len(driver) < 4096
 assert driver[:2] == b"\x0e\x1f" and not driver.startswith(b"MZ")
 assert b"SCPLAT 1.0 EXPERIMENTAL" in driver
+tester = (root / "TESTPLAT.COM").read_bytes()
+test_source = (root / "TESTPLAT.S").read_text()
+assert 200 < len(tester) < 2048 and tester[:2] == b"\x0e\x1f"
+assert b"SCPLAT 1.0 confirmed" in tester
+assert "mov ax,0xe7a2" in test_source and "cmp ax,0x504c" in test_source
+assert "mov dx,0x0300" in test_source and ".space 13440" in test_source
+assert "sample_lengths: .word 11264,8704,10752,13440,5120,384,768,1536" in test_source
 assert "call synth_platinum_effect" in src
 assert "cmp dx,0x0300" in src and "cmp byte ptr [effect_type],0" in src
 assert "platinum_level:" in src and "imul word ptr [si+12]" in src
