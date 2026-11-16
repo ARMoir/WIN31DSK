@@ -1,5 +1,7 @@
 # SCEXSND v0.32 — sound for original DOS SimCity on a Tandy 1000 EX
 
+**New experimental Platinum option:** The separate **SCPLAT.COM** driver remasters all eight known SimCity v1.02 sound blocks with distinct three-tone/noise arrangements. See [PLATINUM.md](PLATINUM.md) for details and the dedicated **TESTPLAT.COM** comparison test. SCEXSND v0.32 remains unchanged as the fallback.
+
 8086/V20-compatible real-mode DOS TSR. Emulates later SL/TL digital sound BIOS (INT 1Ah, AH=81h/83h/84h/85h), synthesizing approximate sound through the EX's original three-voice/noise generator at port 0C0h. MIT licensed.
 
 ## Upgrade from hardware-tested v0.31
