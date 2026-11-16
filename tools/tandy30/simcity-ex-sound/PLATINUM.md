@@ -32,7 +32,7 @@ separate hardware tests so they do not harm SimCity timing or stability.
 
 Download the successful **Tandy 1000 EX SimCity sound shim** Actions artifact
 for the TANDY30 branch. The artifact includes SCPLAT.COM, SCEXSND.COM,
-TESTSND.COM and rollback executables.
+TESTPLAT.COM, TESTSND.COM and rollback executables.
 
 1. Reboot the Tandy first. Do not stack this TSR with SCEXSND, old HOOK
    diagnostics or SCGATE. The drivers use a common installed signature to
@@ -41,10 +41,11 @@ TESTSND.COM and rollback executables.
 3. In your SimCity v1.02 directory, run:
 
        SCPLAT
-       TESTSND
+       TESTPLAT
        SIMCITY
 
-4. Listen to construction, bulldozing and disaster effects. Also check game
+4. TESTPLAT plays all eight synth presets in sequence. Then listen to construction,
+   bulldozing and disaster effects in SimCity. Also check game
    responsiveness and whether events trigger reliably.
 5. For an A/B test, **reboot**, install SCEXSND instead, and replay the same
    game actions. If SCPLAT causes glitches, stay with SCEXSND.
