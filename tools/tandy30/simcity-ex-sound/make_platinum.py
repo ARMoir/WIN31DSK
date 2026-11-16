@@ -218,6 +218,9 @@ def main():
     end = src.index("generic_play:", start)
     src = src[:start] + DETECTION + src[end:]
     src = replace_once(src,
+        "    test cx,cx\n    jz bios_done",
+        "    test cx,cx\n    jnz platinum_has_bytes\n    jmp bios_done\nplatinum_has_bytes:")
+    src = replace_once(src,
         "    cmp byte ptr [effect_type],0\n    je analyze_generic\n    call synth_short_effect\n    jmp skip_analysis",
         "    cmp byte ptr [effect_type],0\n    je analyze_generic\n    call synth_platinum_effect\n    jmp skip_analysis")
     start = src.index("synth_short_effect:")
