@@ -20,18 +20,20 @@ jobs:
       - name: Verify checked-in DOS binaries before rebuilding
         run: |
           cd tools/tandy30/simcity-ex-sound
-          echo 'd91e7c2d8688e01bd664d66af3c9c5b3a86ded8a85a006e75b5922c273509871  SCEXSND.COM' | sha256sum -c -
-          echo 'e42a702ea3edb3ee60e00c37c9a20372b27de128c4ab9f9d98cbac6cba6e5da9  TESTSND.COM' | sha256sum -c -
+          echo 'a7e6ef90618f3e83da5b1b5bedb10cb764990ecaac25884d143c71cc9ca9a91c  SCEXSND.COM' | sha256sum -c -
+          echo '2dc1aacec0f1f66c146fc3df0ecccda4bef68647d29a0240c5a575240c247ae4  TESTSND.COM' | sha256sum -c -
           echo 'cc9bc2679d0fb433e389a37fdb81ace8ba8c771c01cd2d474bedf926cdd757c7  TSRPROBE.COM' | sha256sum -c -
           echo 'f47360b9965b167a9eb47e2279e4628e4e61f9d99e47c44ab1bb66c6452e3946  SCGATE.COM' | sha256sum -c -
       - name: Build original V20-compatible DOS COM executables
         run: sh tools/tandy30/simcity-ex-sound/BUILD.SH
       - name: Run static build and payload checks
         run: python3 tools/tandy30/simcity-ex-sound/test_build.py
-      - name: Upload diagnostic and experimental executables with instructions
+      - name: Audit 8086 instructions and synthetic sample pitches
+        run: python3 tools/tandy30/simcity-ex-sound/test_driver.py
+      - name: Upload driver and sound test with instructions
         uses: actions/upload-artifact@v4
         with:
-          name: SCEXSND_TANDY_EX_EXPERIMENT
+          name: SCEXSND_TANDY_EX_3VOICE_v030
           path: |
             tools/tandy30/simcity-ex-sound/SCEXSND.COM
             tools/tandy30/simcity-ex-sound/TESTSND.COM

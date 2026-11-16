@@ -1,61 +1,45 @@
-# SimCity EX Sound — experimental 16-bit DOS driver
+# SimCity EX Sound Driver v0.30
 
-For **Tandy 1000 EX** (NEC V20/8088 class), not a Windows sound driver. This project intercepts the later Tandy SL/TL digital-sound BIOS API and attempts to translate unsigned 8-bit PCM *amplitude envelopes* into sound on the EX's built-in 3-voice/noise PSG. **It is not a real DAC emulator.** The EX has no DAC, and SimCity compatibility is not yet verified on actual hardware.
+**Experimental, real-hardware sound quality not yet verified.** Target: Tandy 1000 EX, NEC V20 / 8088-compatible CPU, DOS 6.22, original 1989 DOS SimCity.
 
-## Hardware issue reported: hang after install message
+## What changed
 
-The first real Tandy 1000 EX run on November 15, 2026 printed the SCEXSND 0.1 installation message but did **not** return to the DOS prompt. **Do not run SCEXSND.COM again until this is debugged.** Reboot clears the resident interrupt hooks; keep this experiment out of AUTOEXEC.BAT.
+v0.30 replaces the original noise-envelope-only driver with **PSG resynthesis**. A tiny resident program intercepts later Tandy SL/TL digital BIOS calls (INT 1Ah AH=81h/83h/84h/85h), analyzes at most 64 PCM samples per 18.2 Hz BIOS clock tick, estimates fundamental pitch from zero crossings, scales loudness from the signal envelope, and drives all **three independent Tandy SN76489 tone channels** (fundamental, octave, suboctave). It switches to the PSG noise channel for high-frequency/transient material. It uses I/O port 0xC0, does not reprogram the PIT or DMA, and avoids 386/286 instructions.
 
-**Hardware result:** `TSRPROBE.COM` returned to `C:\SIMCITY>` on November 15, 2026. Plain DOS TSR termination works; original `SCEXSND.COM` remains unsafe after it hung during installation.
+**Not a DAC:** the EX cannot output arbitrary PCM faithfully. This technique may sound fuller than a PC speaker for some effects and worse for others. No claim of real SimCity compatibility or superior sound until verified on the original hardware.
 
-**Hardware update (November 15):** `HOOK1A.COM` and `HOOK1C.COM` both returned to the DOS prompt. They were run consecutively in the same boot, so this validates that both simple pass-through hooks can coexist; it does not fully establish separate-boot behavior. The original installer hang is therefore more likely to be in its additional interrupt logic or initialization rather than vector installation alone.
+## Real Tandy EX test
 
-**Next test: SCGATE.COM** — a tiny 128-byte BIOS status-only shim. It installs only INT 1Ah, intercepts AH=81h and returns a simulated idle digital-sound BIOS status. Every other function chains to the original BIOS. No INT 1Ch hook, no PSG writes, no sound.
-
-1. Reboot first to remove the previous hook diagnostics.
-2. Run `SCGATE` from a normal DOS prompt. It should print "sound BIOS status only" and return to the prompt immediately.
-3. Check that you can type `DIR` and see output. Then reboot again.
-4. **Do not run SimCity, TESTSND, SCEXSND or the other hook diagnostics in the same boot.** If it hangs, reboot.
-
-If SCGATE also returns normally, the remaining trouble is more likely in SCEXSND's timer routine or its other BIOS functions than in the simple AH=81h interception.
-
-## Files
-
-- **SCGATE.COM** — next stage: INT 1Ah sound BIOS status-only (AH=81h), zero sound/timer writes.
-- **HOOK1A.COM** — 112-byte INT 1Ah pass-through, no sound or timer hook.
-- **HOOK1C.COM** — 112-byte INT 1Ch pass-through, no sound or INT 1Ah hook.
-- **TSRPROBE.COM** — 96-byte non-sound DOS TSR termination diagnostic; installs **no** interrupt hooks. Next hardware test.
-- **SCEXSND.COM** — tiny resident driver (INT 1Ah AH=81h status, 83h play, 84h stop, 85h reset; INT 1Ch timer and INT 15h AX=91FBh completion).
-- **TESTSND.COM** — audible hardware test; verifies the BIOS status, second-call busy response and completion.
-- **SCEXSND.S / TESTSND.S** — source, assembled as DOS .COM with GNU binutils.
-- **BUILD.SH** — reproducible Linux build; run with `sh BUILD.SH`.
-
-## Original test plan (paused: installation hang on real EX)
-
-**Do not proceed with this original sequence until the installer hang is resolved.**
-
-Copy both COM files to your CF card (for example `C:\SIMCITY`). At a DOS prompt:
+Reboot first to clear all older sound/diagnostic TSRs. Back up your functioning CF image. Copy **both** v0.30 COM files to `C:\SIMCITY` and run from DOS:
 
 ```dos
 C:
 CD \SIMCITY
 SCEXSND
 TESTSND
+SIMCITY
 ```
 
-Expected: installation message; “PASS: busy contract”; short noisy PSG effect; “PASS: sound completed”. If that succeeds, launch your original **SimCity** from DOS and report whether the “Tandy sound BIOS missing” message disappears and whether sound changes. Some versions may need Tandy sound reselected in the game's configuration.
+Expected installation line: **SCEXSND 0.30: EX 3-voice audio synthesis enabled.** `TESTSND` should play a short changing-pitch effect followed by a noisy sound, confirm busy status, and return to DOS. Then compare the actual SimCity audio against the game's IBM/PC-speaker option. If SimCity still announces "Tandy sound BIOS missing", or sounds worse than the PC speaker, this approach is not yet good enough; no additional diagnostic round is required.
 
-**Use in plain DOS only. Do NOT put the driver in AUTOEXEC.BAT or boot it automatically with Windows 3.0.** It stays resident until reboot; reboot to uninstall and restore normal vectors. Back up your working CF image. Do not load on a later Tandy SL/TL already equipped with a native DAC.
+Do not add it to AUTOEXEC.BAT while experimental. Driver remains loaded once per boot; **reboot to unload**. Stop testing and reboot if the machine hangs. Do not run under Windows 3.0 or stack with HOOK1A, HOOK1C or SCGATE.
 
-## Limitations
+## Hardware findings and fix
 
-- Only the EX PSG **noise** voice is used, yielding crude sound effects, not digitized music/speech. Timer sampling is only 18.2 Hz to minimize load on a 7 MHz V20.
-- May conflict with a game's existing use of the PSG noise voice; no automatic mixing.
-- BIOS AH=82h (microphone input) not implemented. Unrecognized INT 1Ah services chain to the ROM.
-- No real-hardware validation yet; the presence of these files does **not** establish that SimCity will select or work with this shim.
-- A real 64KiB-crossing test and simultaneous program/driver behavior remain to be tested.
-- These files are standalone extras and **do not modify the proven Windows 3.0 CF images**.
+November 15, 2026: v0.1 printed its installation message but hung. `TSRPROBE`, `HOOK1A`, `HOOK1C` and `SCGATE` returned normally on real EX hardware. The original driver used assembler-generated long conditional jumps, which could encode 386-only 0F 8x opcodes. v0.30 uses short conditional jumps, safe near unconditional jumps and an explicit instruction-stream audit. The playback path is rewritten; static build tests and a mathematical sound model pass, **not a substitute for EX testing**.
 
-References: [SL/TL BIOS services](https://www.manualslib.com/manual/1219946/Tandy-1000-Sl.html?page=564), [playback calling convention](https://www.manualslib.com/manual/1219946/Tandy-1000-Sl.html?page=566), [completion callback](https://www.manualslib.com/manual/1219946/Tandy-1000-Sl.html?page=567), [DOSBox-X BIOS implementation](https://dosbox-x.com/doxygen/html/bios_8cpp_source.html).
+## Micropolis reference
 
-MIT licensed (see LICENSE). No proprietary DOS, Windows or SimCity files included.
+The [SimHacker/Micropolis repository](https://github.com/SimHacker/micropolis) supplies useful **sound-effect names and reference audio** (bulldozer, siren, explosion, etc.) in `MicropolisCore/res/sounds` and dispatch code in `micropolis-activity/src/sim/w_sound.c`. They are **Unix-era assets, not original DOS Tandy BIOS routines**; we have not copied their sound files or GPL code into this independently written MIT driver.
+
+## Files and limitations
+
+- `SCEXSND.COM`: 960-byte resident driver.
+- `TESTSND.COM`: 544-byte DOS test generating its 4,096-byte PCM sample in RAM (three tones and noise). It has a 3-second busy timeout.
+- `SCEXSND.S`, `TESTSND.S`: assembly source; `BUILD.SH`: GNU binutils build; `test_build.py` and `test_driver.py`: static, ISA and sound-model checks.
+- Old diagnostic tools remain for history but are no longer required to try the replacement.
+- BIOS microphone recording (AH=82h) is not implemented; other INT 1Ah calls chain to the ROM. Completion sends INT 15h AX=91FBh.
+- If SimCity uses short samples with no discernible pitch, those parts may be muted; 18.2 Hz envelope updates limit precision. PSG effects can overwrite other simultaneously playing Tandy tones.
+- No proprietary SimCity, DOS, Windows, or Micropolis assets are included.
+
+References: [Tandy SL sound API](https://www.manualslib.com/manual/1219946/Tandy-1000-Sl.html?page=564), [playback convention](https://www.manualslib.com/manual/1219946/Tandy-1000-Sl.html?page=566), [DOSBox-X sound BIOS](https://dosbox-x.com/doxygen/html/bios_8cpp_source.html). MIT license: LICENSE.
