@@ -229,9 +229,9 @@ def main():
     # A second, Platinum-only probe lets TESTPLAT distinguish our driver
     # from SCEXSND without changing the shared anti-stacking signature.
     src = replace_once(src,
-        "int1a_entry:\\n    cmp ax, 0xe7a1",
-        "int1a_entry:\\n    cmp ax, 0xe7a2\\n    jne platinum_legacy_probe\\n"
-        "    mov ax,0x504c\\n    iret\\nplatinum_legacy_probe:\\n    cmp ax, 0xe7a1")
+        "int1a_entry:\n    cmp ax, 0xe7a1",
+        "int1a_entry:\n    cmp ax, 0xe7a2\n    jne platinum_legacy_probe\n"
+        "    mov ax,0x504c\n    iret\nplatinum_legacy_probe:\n    cmp ax, 0xe7a1")
     src = replace_once(src, "effect_age:     .byte 0",
                        "effect_age:     .byte 0\neffect_fade:    .byte 0")
     src = replace_once(src,
